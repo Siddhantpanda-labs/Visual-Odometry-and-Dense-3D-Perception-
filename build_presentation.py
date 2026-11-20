@@ -1,667 +1,727 @@
 import os
 import cv2
-import pptx
 from pptx import Presentation
-from pptx.util import Inches, Pt
+from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
+from pptx.oxml.ns import qn
 
-def create_deck():
+# =============================================================================
+# DESIGN SYSTEM: "Quantum" Clean Academic — White + Forest Green + Mint
+# Inspired by: Clean research methodology decks, white backgrounds,
+# dark-green accent, geometric shapes, generous whitespace
+# =============================================================================
+
+# Colors
+BG_WHITE       = RGBColor(255, 255, 255)
+BG_OFFWHITE    = RGBColor(248, 250, 252)   # #F8FAFC very subtle cool-gray bg
+SURFACE_MINT   = RGBColor(220, 240, 230)   # #DCF0E6 light mint panels
+SURFACE_LIGHT  = RGBColor(236, 253, 243)   # #ECFDF3 ultra-light green tint
+
+GREEN_DARK     = RGBColor(27, 67, 50)      # #1B4332 deep forest green
+GREEN_PRIMARY  = RGBColor(45, 106, 79)     # #2D6A4F primary green
+GREEN_MID      = RGBColor(64, 145, 108)    # #40916C medium green
+GREEN_LIGHT    = RGBColor(82, 183, 136)    # #52B788 light green
+GREEN_PALE     = RGBColor(183, 228, 199)   # #B7E4C7 pale green
+
+TEXT_BLACK     = RGBColor(17, 24, 39)      # #111827 near-black
+TEXT_DARK      = RGBColor(31, 41, 55)      # #1F2937 dark gray
+TEXT_BODY      = RGBColor(55, 65, 81)      # #374151 body text
+TEXT_MUTED     = RGBColor(107, 114, 128)   # #6B7280 muted gray
+TEXT_LIGHT_MUT = RGBColor(156, 163, 175)   # #9CA3AF light muted
+
+BORDER_LIGHT   = RGBColor(229, 231, 235)   # #E5E7EB subtle border
+BORDER_GREEN   = RGBColor(167, 215, 189)   # #A7D7BD green-tinted border
+
+FONT_TITLE     = "Segoe UI"
+FONT_BODY      = "Segoe UI"
+FONT_CODE      = "Consolas"
+
+SW = Inches(13.333)
+SH = Inches(7.5)
+
+
+def create_presentation():
     prs = Presentation()
-    prs.slide_width = Inches(13.333)
-    prs.slide_height = Inches(7.5)
-    blank_layout = prs.slide_layouts[6] # Blank layout
+    prs.slide_width = SW
+    prs.slide_height = SH
+    blank = prs.slide_layouts[6]
 
-    # =========================================================================
-    # Gamma AI Inspired Obsidian Slate Color System (High Contrast & Legibility)
-    # =========================================================================
-    BG_OBSIDIAN    = RGBColor(10, 13, 20)      # #0A0D14 Deep Obsidian Void
-    CARD_BG        = RGBColor(20, 27, 41)      # #141B29 Elevated Container
-    CARD_BG_ALT    = RGBColor(28, 38, 58)      # #1C263A High-level Container
-    CARD_BORDER    = RGBColor(46, 61, 89)      # #2E3D59 Crisp Subtle Border
-    
-    # Accent Highlights
-    CYAN_ACCENT    = RGBColor(56, 189, 248)    # #38BDF8 Electric Cyan
-    INDIGO_ACCENT  = RGBColor(129, 140, 248)   # #818CF8 Soft Violet / Indigo
-    EMERALD_ACCENT = RGBColor(52, 211, 153)    # #34D399 High-Vis Emerald
-    AMBER_ACCENT   = RGBColor(251, 191, 36)    # #FBBF24 Vibrant Amber
-    
-    # High-Visibility Text Colors (No dim grays!)
-    TEXT_PURE_WHITE= RGBColor(255, 255, 255)   # #FFFFFF Headers & Primary Titles
-    TEXT_BRIGHT    = RGBColor(241, 245, 249)   # #F1F5F9 Ultra-crisp Body Text
-    TEXT_MUTED     = RGBColor(186, 198, 217)   # #BAC6D9 Highly-legible Secondary Text
-    TEXT_CODE      = RGBColor(125, 211, 252)   # #7DD3FC Code & Formulas
+    # ── Helper Functions ─────────────────────────────────────────────
 
-    FONT_FAMILY = "Segoe UI"
-
-    def apply_slide_bg(slide):
-        bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Inches(13.333), Inches(7.5))
-        bg.fill.solid()
-        bg.fill.fore_color.rgb = BG_OBSIDIAN
+    def white_bg(slide):
+        """Fill slide background white."""
+        bg = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, SW, SH)
+        bg.fill.solid(); bg.fill.fore_color.rgb = BG_WHITE
         bg.line.fill.background()
-        return bg
 
-    def add_card(slide, left, top, width, height, bg_color=CARD_BG, border_color=CARD_BORDER, border_width=1.2):
-        card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, width, height)
-        card.fill.solid()
-        card.fill.fore_color.rgb = bg_color
-        if border_color:
-            card.line.color.rgb = border_color
-            card.line.width = Pt(border_width)
-        else:
-            card.line.fill.background()
-        return card
+    def top_bar(slide, slide_num=None):
+        """Green accent stripe along top edge, like the Quantum nav bar."""
+        bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, SW, Inches(0.06))
+        bar.fill.solid(); bar.fill.fore_color.rgb = GREEN_PRIMARY
+        bar.line.fill.background()
+        # Slide number badge in top-right
+        if slide_num:
+            badge = slide.shapes.add_shape(
+                MSO_SHAPE.ROUNDED_RECTANGLE,
+                Inches(12.1), Inches(0.25), Inches(0.9), Inches(0.4)
+            )
+            badge.fill.solid(); badge.fill.fore_color.rgb = GREEN_PRIMARY
+            badge.line.fill.background()
+            tf = badge.text_frame
+            tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+            p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+            run = p.add_run(); run.text = f"0{slide_num} / 09"
+            run.font.name = FONT_BODY; run.font.size = Pt(9)
+            run.font.bold = True; run.font.color.rgb = BG_WHITE
 
-    def add_eyebrow_header(slide, category_text, title_text, accent_color=CYAN_ACCENT):
-        # Category Eyebrow Pill / Badge Tag
-        tag_box = slide.shapes.add_textbox(Inches(0.8), Inches(0.42), Inches(11.733), Inches(0.32))
-        tf_tag = tag_box.text_frame
-        tf_tag.word_wrap = True
-        tf_tag.margin_left = tf_tag.margin_top = tf_tag.margin_right = tf_tag.margin_bottom = 0
-        p_tag = tf_tag.paragraphs[0]
-        p_tag.text = f"■  {category_text.upper()}"
-        p_tag.font.name = FONT_FAMILY
-        p_tag.font.size = Pt(11)
-        p_tag.font.bold = True
-        p_tag.font.color.rgb = accent_color
-
-        # Main Slide Title
-        title_box = slide.shapes.add_textbox(Inches(0.8), Inches(0.76), Inches(11.733), Inches(0.55))
-        tf_title = title_box.text_frame
-        tf_title.word_wrap = True
-        tf_title.margin_left = tf_title.margin_top = tf_title.margin_right = tf_title.margin_bottom = 0
-        p_title = tf_title.paragraphs[0]
-        p_title.text = title_text
-        p_title.font.name = FONT_FAMILY
-        p_title.font.size = Pt(21)
-        p_title.font.bold = True
-        p_title.font.color.rgb = TEXT_PURE_WHITE
-
-    def add_fit_picture(slide, img_path, target_left, target_top, max_w, max_h):
-        if not os.path.exists(img_path):
-            return None
-        img = cv2.imread(img_path)
-        if img is None:
-            return None
-        h, w = img.shape[:2]
-        aspect = w / h
-        
-        # Scale to fit inside max_w x max_h
-        target_w = max_w
-        target_h = target_w / aspect
-        if target_h > max_h:
-            target_h = max_h
-            target_w = target_h * aspect
-        
-        # Center inside target box
-        offset_x = (max_w - target_w) / 2
-        offset_y = (max_h - target_h) / 2
-        
-        pic = slide.shapes.add_picture(
-            img_path,
-            target_left + Inches(offset_x),
-            target_top + Inches(offset_y),
-            width=Inches(target_w),
-            height=Inches(target_h)
+    def section_title(slide, text, top=Inches(0.55), left=Inches(0.9)):
+        """Small green-accented section title with arrow chevron."""
+        # Green chevron arrow
+        chev = slide.shapes.add_shape(
+            MSO_SHAPE.CHEVRON, left, top + Inches(0.03), Inches(0.3), Inches(0.3)
         )
-        return pic
+        chev.fill.solid(); chev.fill.fore_color.rgb = GREEN_PRIMARY
+        chev.line.fill.background()
+        # Title text
+        tb = slide.shapes.add_textbox(left + Inches(0.4), top, Inches(10), Inches(0.42))
+        tf = tb.text_frame; tf.word_wrap = True
+        tf.margin_left = tf.margin_top = tf.margin_right = tf.margin_bottom = 0
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = text
+        run.font.name = FONT_TITLE; run.font.size = Pt(22)
+        run.font.bold = True; run.font.color.rgb = TEXT_BLACK
 
-    # =========================================================================
-    # SLIDE 1: Title & University Presentation Credentials (Gamma Hero Style)
-    # =========================================================================
-    s1 = prs.slides.add_slide(blank_layout)
-    apply_slide_bg(s1)
+    def card_rect(slide, left, top, w, h, fill=SURFACE_MINT, border=None):
+        """Soft rounded card."""
+        c = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left, top, w, h)
+        c.fill.solid(); c.fill.fore_color.rgb = fill
+        if border:
+            c.line.color.rgb = border; c.line.width = Pt(1)
+        else:
+            c.line.fill.background()
+        return c
 
-    # Top Cyan Glow Line
-    glow = s1.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.8), Inches(0.7), Inches(11.733), Inches(0.04))
-    glow.fill.solid()
-    glow.fill.fore_color.rgb = CYAN_ACCENT
-    glow.line.fill.background()
+    def green_circle(slide, left, top, size, label_text="", icon_text=""):
+        """Green circle icon badge, like the Quantum template circles."""
+        circ = slide.shapes.add_shape(MSO_SHAPE.OVAL, left, top, size, size)
+        circ.fill.solid(); circ.fill.fore_color.rgb = GREEN_PRIMARY
+        circ.line.fill.background()
+        if icon_text:
+            tf = circ.text_frame
+            tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+            p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+            run = p.add_run(); run.text = icon_text
+            run.font.name = FONT_BODY; run.font.size = Pt(int(size / Inches(1) * 11))
+            run.font.bold = True; run.font.color.rgb = BG_WHITE
 
-    # Main Hero Container Card
-    hero_card = add_card(s1, Inches(0.8), Inches(0.9), Inches(11.733), Inches(6.0), CARD_BG, CARD_BORDER, 1.5)
+    def text_box(slide, left, top, w, h):
+        tb = slide.shapes.add_textbox(left, top, w, h)
+        tf = tb.text_frame; tf.word_wrap = True
+        tf.margin_left = Pt(4); tf.margin_top = Pt(2)
+        tf.margin_right = Pt(4); tf.margin_bottom = Pt(2)
+        return tf
 
-    # Eyebrow Badge
-    tb = s1.shapes.add_textbox(Inches(1.2), Inches(1.3), Inches(10.9), Inches(0.35))
-    p = tb.text_frame.paragraphs[0]
-    p.text = "■  CSE471 COMPUTER VISION — FINAL PROJECT PRESENTATION"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
+    def add_para(tf, text, size=11, color=TEXT_BODY, bold=False, font=FONT_BODY, align=None, spacing_before=0):
+        p = tf.add_paragraph()
+        run = p.add_run(); run.text = text
+        run.font.name = font; run.font.size = Pt(size)
+        run.font.bold = bold; run.font.color.rgb = color
+        if align: p.alignment = align
+        if spacing_before: p.space_before = Pt(spacing_before)
+        return p
 
-    # Main Project Title
-    tb_title = s1.shapes.add_textbox(Inches(1.2), Inches(1.7), Inches(10.9), Inches(1.4))
-    tf = tb_title.text_frame; tf.word_wrap = True
+    def fit_picture(slide, path, left, top, max_w, max_h):
+        if not os.path.exists(path): return None
+        img = cv2.imread(path)
+        if img is None: return None
+        ih, iw = img.shape[:2]
+        ratio = iw / ih
+        tw = max_w; th = tw / ratio
+        if th > max_h:
+            th = max_h; tw = th * ratio
+        ox = (max_w - tw) / 2; oy = (max_h - th) / 2
+        return slide.shapes.add_picture(
+            path,
+            Inches(left + ox), Inches(top + oy),
+            width=Inches(tw), height=Inches(th)
+        )
+
+    def bottom_divider(slide, top):
+        line = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE,
+            Inches(0.9), Inches(top), Inches(11.533), Inches(0.015)
+        )
+        line.fill.solid(); line.fill.fore_color.rgb = BORDER_LIGHT
+        line.line.fill.background()
+
+    # ══════════════════════════════════════════════════════════════════
+    #  SLIDE 1 — TITLE SLIDE (Hero)
+    # ══════════════════════════════════════════════════════════════════
+    s = prs.slides.add_slide(blank)
+    white_bg(s)
+    top_bar(s)
+
+    # Left green accent sidebar
+    sidebar = s.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, 0, 0, Inches(0.12), SH
+    )
+    sidebar.fill.solid(); sidebar.fill.fore_color.rgb = GREEN_PRIMARY
+    sidebar.line.fill.background()
+
+    # Course Badge Pill
+    pill = card_rect(s, Inches(1.0), Inches(1.0), Inches(5.5), Inches(0.45), GREEN_PRIMARY)
+    tf = pill.text_frame
+    tf.margin_left = Pt(12); tf.margin_top = Pt(2)
+    p = tf.paragraphs[0]; p.alignment = PP_ALIGN.LEFT
+    run = p.add_run(); run.text = "CSE471  ·  Computer Vision  ·  Final Project Presentation"
+    run.font.name = FONT_BODY; run.font.size = Pt(11)
+    run.font.bold = True; run.font.color.rgb = BG_WHITE
+
+    # Main Title
+    tf = text_box(s, Inches(1.0), Inches(1.75), Inches(7.5), Inches(1.6))
     p = tf.paragraphs[0]
-    p.text = "Robust Multi-Sensor Visual Odometry\n& Dense 3D Perception"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(32); p.font.bold = True; p.font.color.rgb = TEXT_PURE_WHITE
+    run = p.add_run()
+    run.text = "Robust Multi-Sensor\nVisual Odometry &\nDense 3D Perception"
+    run.font.name = FONT_TITLE; run.font.size = Pt(36)
+    run.font.bold = True; run.font.color.rgb = TEXT_BLACK
 
     # Subtitle
-    tb_sub = s1.shapes.add_textbox(Inches(1.2), Inches(3.25), Inches(10.9), Inches(0.6))
-    tf = tb_sub.text_frame; tf.word_wrap = True
+    tf_sub = text_box(s, Inches(1.0), Inches(3.55), Inches(7.5), Inches(0.5))
+    p = tf_sub.paragraphs[0]
+    run = p.add_run()
+    run.text = "Real-Time Metric Navigation Under Geometric Degeneracy & Highway Scale Drift"
+    run.font.name = FONT_BODY; run.font.size = Pt(14)
+    run.font.color.rgb = GREEN_PRIMARY; run.font.bold = True
+
+    # Thin green separator line
+    sep = s.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(1.0), Inches(4.2), Inches(3.5), Inches(0.04)
+    )
+    sep.fill.solid(); sep.fill.fore_color.rgb = GREEN_PRIMARY
+    sep.line.fill.background()
+
+    # Candidate Info Rows
+    tf_info = text_box(s, Inches(1.0), Inches(4.45), Inches(6.0), Inches(2.0))
+    p = tf_info.paragraphs[0]
+    run = p.add_run(); run.text = "Sidhant Kumar Panda"
+    run.font.name = FONT_TITLE; run.font.size = Pt(16)
+    run.font.bold = True; run.font.color.rgb = TEXT_BLACK
+
+    add_para(tf_info, "Registration No: 12413416", 12, GREEN_PRIMARY, True, spacing_before=4)
+    add_para(tf_info, "Project Guide: Abhishek Tiwari", 12, TEXT_BODY, spacing_before=4)
+    add_para(tf_info, "School of Computer Science & Engineering · Division of Machine Intelligence", 11, TEXT_MUTED, spacing_before=4)
+
+    # Stat Cards Row at Bottom
+    stat_data = [("8.60×", "Drift Reduction"), ("1.87%", "Pose Error"), ("60.9", "FPS Real-Time"), ("350K+", "3D Points")]
+    for i, (val, label) in enumerate(stat_data):
+        cx = Inches(1.0 + i * 1.85)
+        card_rect(s, cx, Inches(6.0), Inches(1.65), Inches(1.0), SURFACE_MINT, BORDER_GREEN)
+        tf = text_box(s, cx + Inches(0.1), Inches(6.05), Inches(1.45), Inches(0.9))
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = val
+        run.font.name = FONT_TITLE; run.font.size = Pt(18)
+        run.font.bold = True; run.font.color.rgb = GREEN_PRIMARY
+        add_para(tf, label, 9, TEXT_MUTED)
+
+    # Right side: Architecture image in a mint-tinted card (BIGGER)
+    card_rect(s, Inches(8.3), Inches(1.0), Inches(4.633), Inches(5.8), SURFACE_MINT, BORDER_GREEN)
+    fit_picture(s, "docs/figures/fig1_architecture.png", 8.4, 1.15, 4.433, 5.5)
+
+    # ══════════════════════════════════════════════════════════════════
+    #  SLIDE 2 — PROBLEM STATEMENT: 3 Failure Modes
+    # ══════════════════════════════════════════════════════════════════
+    s = prs.slides.add_slide(blank)
+    white_bg(s); top_bar(s, 2)
+    section_title(s, "Research Problem & Motivation")
+
+    # Three column cards
+    col_w = Inches(3.64); col_h = Inches(5.6)
+    gap = Inches(0.4); col_top = Inches(1.3)
+
+    for i, (num, title, color, bullets) in enumerate([
+        ("01", "Unconstrained\nScale Drift", GREEN_DARK, [
+            "Monocular geometry recovers only relative translation direction — absolute metric scale factor remains unobservable.",
+            "Small per-frame scale errors compound quadratically, inflating trajectory length by >16% over extended routes.",
+            "Without external sensors, the system cannot distinguish high-speed highway driving from low-speed crawling.",
+        ]),
+        ("02", "Motion Blur &\nTrack Loss", GREEN_PRIMARY, [
+            "Highway chassis vibrations, pavement bumps, and engine oscillations smear spatial gradients across the image.",
+            "Harris corner scores drop below threshold τ, causing KLT tracker to shed features and collapse to zero active tracks.",
+            "Standard pipelines abort without recovery, causing complete odometry blackout during aggressive maneuvers.",
+        ]),
+        ("03", "Planar Road\nDegeneracy", GREEN_MID, [
+            "When all features lie on the flat road plane, the Essential Matrix E becomes mathematically degenerate.",
+            "Degenerate decomposition yields two valid rotations — the solver frequently selects the false 'ghost' solution.",
+            "RANSAC converges on erroneous motion vectors, twisting straight trajectories into fictitious spiral paths.",
+        ]),
+    ]):
+        cx = Inches(0.9) + (col_w + gap) * i
+
+        # Card container
+        card_rect(s, cx, col_top, col_w, col_h, BG_OFFWHITE, BORDER_LIGHT)
+
+        # Number circle
+        green_circle(s, cx + Inches(0.3), col_top + Inches(0.3), Inches(0.55), icon_text=num)
+
+        # Card Title
+        tf = text_box(s, cx + Inches(1.0), col_top + Inches(0.25), col_w - Inches(1.3), Inches(0.7))
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = title
+        run.font.name = FONT_TITLE; run.font.size = Pt(16)
+        run.font.bold = True; run.font.color.rgb = TEXT_BLACK
+
+        # Green divider inside card
+        div = s.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, cx + Inches(0.3), col_top + Inches(1.15),
+            col_w - Inches(0.6), Inches(0.025)
+        )
+        div.fill.solid(); div.fill.fore_color.rgb = color
+        div.line.fill.background()
+
+        # Bullet points
+        for j, bullet in enumerate(bullets):
+            # Green dot
+            dot = s.shapes.add_shape(
+                MSO_SHAPE.OVAL,
+                cx + Inches(0.35), col_top + Inches(1.45 + j * 1.4),
+                Inches(0.12), Inches(0.12)
+            )
+            dot.fill.solid(); dot.fill.fore_color.rgb = color
+            dot.line.fill.background()
+
+            tf = text_box(s,
+                cx + Inches(0.55), col_top + Inches(1.35 + j * 1.4),
+                col_w - Inches(0.9), Inches(1.3)
+            )
+            p = tf.paragraphs[0]
+            run = p.add_run(); run.text = bullet
+            run.font.name = FONT_BODY; run.font.size = Pt(11)
+            run.font.color.rgb = TEXT_BODY
+
+    # ══════════════════════════════════════════════════════════════════
+    #  SLIDE 3 — SYSTEM ARCHITECTURE
+    # ══════════════════════════════════════════════════════════════════
+    s = prs.slides.add_slide(blank)
+    white_bg(s); top_bar(s, 3)
+    section_title(s, "System Architecture & Processing Pipeline")
+
+    # Left: 4-step pipeline cards (stacked vertically, narrower to give more room to image)
+    steps = [
+        ("01", "Adaptive Radiometric Normalization",
+         "CLAHE (clip limit 3.0, 8×8 grid) equalizes harsh windshield shadows and asphalt glare before feature detection."),
+        ("02", "Pyramidal KLT Optical Flow",
+         "Tracks 1,500 Shi-Tomasi corners across 4 pyramid levels with bidirectional consistency check (‖xᵢ − x̂ᵢ‖₂ < 1.0 px)."),
+        ("03", "Failure-Gating State Machine",
+         "Monitors inlier count N and baseline magnitude. Automatically shifts between 5-point Essential Matrix and P3P RANSAC."),
+        ("04", "Multi-Sensor Fallback",
+         "Operates in calibrated stereo (b = 0.54 m) as primary mode; gracefully degrades to monocular when second feed drops."),
+    ]
+    for i, (num, title, desc) in enumerate(steps):
+        y = Inches(1.25 + i * 1.45)
+        card_rect(s, Inches(0.9), y, Inches(4.8), Inches(1.25), SURFACE_LIGHT if i % 2 == 0 else BG_OFFWHITE, BORDER_GREEN if i % 2 == 0 else BORDER_LIGHT)
+        green_circle(s, Inches(1.1), y + Inches(0.17), Inches(0.45), icon_text=num)
+        tf = text_box(s, Inches(1.7), y + Inches(0.08), Inches(3.7), Inches(0.35))
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = title
+        run.font.name = FONT_TITLE; run.font.size = Pt(13)
+        run.font.bold = True; run.font.color.rgb = TEXT_BLACK
+        tf = text_box(s, Inches(1.7), y + Inches(0.45), Inches(3.7), Inches(0.7))
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = desc
+        run.font.name = FONT_BODY; run.font.size = Pt(10.5)
+        run.font.color.rgb = TEXT_BODY
+
+    # Right: Architecture Diagram Image (BIGGER — takes more space)
+    card_rect(s, Inches(6.0), Inches(1.25), Inches(6.733), Inches(5.8), SURFACE_MINT, BORDER_GREEN)
+    fit_picture(s, "docs/figures/fig1_architecture.png", 6.1, 1.4, 6.533, 5.3)
+    tf = text_box(s, Inches(6.1), Inches(6.65), Inches(6.533), Inches(0.3))
+    p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+    run = p.add_run(); run.text = "Fig 1: End-to-end perception pipeline with failure-gated state machine"
+    run.font.name = FONT_BODY; run.font.size = Pt(9); run.font.color.rgb = TEXT_MUTED
+
+    # ══════════════════════════════════════════════════════════════════
+    #  SLIDE 4 — MATHEMATICAL METHODOLOGY
+    # ══════════════════════════════════════════════════════════════════
+    s = prs.slides.add_slide(blank)
+    white_bg(s); top_bar(s, 4)
+    section_title(s, "Mathematical Methodology")
+
+    # Two large side-by-side panels with PROPER MATH
+    pw = Inches(5.666)
+    for i, (title, accent, items) in enumerate([
+        ("Calibrated Stereo Metric Triangulation", GREEN_PRIMARY, [
+            ("Physical Baseline", "Calibrated stereo baseline  b = 0.54 m  between left and right optical centers provides direct metric scale observability at every frame.", False),
+            ("Depth Triangulation", "Z  =  f · b  /  d", True),
+            ("3D Reconstruction", "X  =  (u − cₓ) · Z / f        Y  =  (v − c_y) · Z / f", True),
+            ("Scale Guarantee", "Every 3D landmark Xⱼ is instantiated in physical meters (SI), eliminating speed ambiguity and trajectory scale inflation.", False),
+            ("Precision Bound", "δZ  =  ( Z² / f·b ) · δd       →  sub-decimeter resolution up to 45 m", True),
+        ]),
+        ("Sliding-Window Bundle Adjustment", GREEN_MID, [
+            ("Joint Optimization", "Jointly refines last W = 5 camera poses  Tₖ = [Rₖ | tₖ]  and 3D landmark positions  Xⱼ  across temporal views.", False),
+            ("Robust Huber Cost", "min      Σ  ρ_Huber(  ‖ uᵢ,ₖ  −  π( Tₖ , Xⱼ ) ‖²  )", True),
+            ("Levenberg-Marquardt", "( Jᵀ J  +  λ · diag(Jᵀ J) )  Δξ  =  − Jᵀ r", True),
+            ("Convergence", "Achieves quadratic convergence within 8–12 iterations per keyframe window.", False),
+            ("Real-Time Bound", "Fixed-lag sliding window ensures strict  O(W)  constant-time computation with zero memory growth.", False),
+        ]),
+    ]):
+        cx = Inches(0.9) + (pw + Inches(0.4)) * i
+        card_rect(s, cx, Inches(1.3), pw, Inches(5.8), BG_OFFWHITE, BORDER_LIGHT)
+
+        # Panel title bar
+        bar = s.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, cx, Inches(1.3), pw, Inches(0.5)
+        )
+        bar.fill.solid(); bar.fill.fore_color.rgb = accent
+        bar.line.fill.background()
+        tf = bar.text_frame
+        tf.margin_left = Pt(16); tf.margin_top = Pt(4)
+        p = tf.paragraphs[0]; p.alignment = PP_ALIGN.LEFT
+        run = p.add_run(); run.text = title
+        run.font.name = FONT_TITLE; run.font.size = Pt(14)
+        run.font.bold = True; run.font.color.rgb = BG_WHITE
+
+        # Items
+        for j, (sub_title, sub_desc, is_formula) in enumerate(items):
+            y = Inches(2.0 + j * 1.0)
+            # Green dot
+            dot = s.shapes.add_shape(MSO_SHAPE.OVAL, cx + Inches(0.25), y + Inches(0.08), Inches(0.12), Inches(0.12))
+            dot.fill.solid(); dot.fill.fore_color.rgb = accent; dot.line.fill.background()
+            # Sub-title
+            tf = text_box(s, cx + Inches(0.45), y - Inches(0.03), pw - Inches(0.7), Inches(0.3))
+            p = tf.paragraphs[0]
+            run = p.add_run(); run.text = sub_title
+            run.font.name = FONT_TITLE; run.font.size = Pt(12)
+            run.font.bold = True; run.font.color.rgb = TEXT_BLACK
+            
+            if is_formula:
+                # Math formula in centered highlight container
+                formula_bg = card_rect(s, cx + Inches(0.4), y + Inches(0.25),
+                    pw - Inches(0.6), Inches(0.42), SURFACE_LIGHT, BORDER_GREEN)
+                tf2 = text_box(s, cx + Inches(0.45), y + Inches(0.27), pw - Inches(0.7), Inches(0.36))
+                p2 = tf2.paragraphs[0]; p2.alignment = PP_ALIGN.CENTER
+                run2 = p2.add_run(); run2.text = sub_desc
+                run2.font.name = "Cambria Math"; run2.font.size = Pt(12.5)
+                run2.font.bold = True; run2.font.color.rgb = accent
+                run2.font.italic = True
+            else:
+                tf = text_box(s, cx + Inches(0.45), y + Inches(0.28), pw - Inches(0.7), Inches(0.65))
+                p = tf.paragraphs[0]
+                run = p.add_run(); run.text = sub_desc
+                run.font.name = FONT_BODY; run.font.size = Pt(10.5)
+                run.font.color.rgb = TEXT_BODY
+
+    # ══════════════════════════════════════════════════════════════════
+    #  SLIDE 5 — BENCHMARK & ABLATION
+    # ══════════════════════════════════════════════════════════════════
+    s = prs.slides.add_slide(blank)
+    white_bg(s); top_bar(s, 5)
+    section_title(s, "Benchmark Results & Ablation Study")
+
+    # 3 large KPI stat circles
+    kpis = [
+        ("8.60×", "Drift Reduction", "ATE RMSE: 26.31 m → 3.06 m"),
+        ("1.87%", "Relative Pose Error", "Across 450 controlled frames"),
+        ("60.9 FPS", "Real-Time Throughput", "Multi-threaded perception pipeline"),
+    ]
+    for i, (val, label, sub) in enumerate(kpis):
+        cx = Inches(1.3 + i * 2.0)
+        # Outer green ring (using a bigger circle behind)
+        ring = s.shapes.add_shape(MSO_SHAPE.OVAL, cx, Inches(1.3), Inches(1.6), Inches(1.6))
+        ring.fill.solid(); ring.fill.fore_color.rgb = GREEN_PRIMARY
+        ring.line.fill.background()
+        inner = s.shapes.add_shape(MSO_SHAPE.OVAL, cx + Inches(0.08), Inches(1.38), Inches(1.44), Inches(1.44))
+        inner.fill.solid(); inner.fill.fore_color.rgb = BG_WHITE
+        inner.line.fill.background()
+        # Value text centered in circle
+        tf = text_box(s, cx + Inches(0.1), Inches(1.65), Inches(1.4), Inches(0.8))
+        p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+        run = p.add_run(); run.text = val
+        run.font.name = FONT_TITLE; run.font.size = Pt(17)
+        run.font.bold = True; run.font.color.rgb = GREEN_PRIMARY
+        # Label below circle
+        tf = text_box(s, cx - Inches(0.2), Inches(3.0), Inches(2.0), Inches(0.6))
+        p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+        run = p.add_run(); run.text = label
+        run.font.name = FONT_TITLE; run.font.size = Pt(11)
+        run.font.bold = True; run.font.color.rgb = TEXT_BLACK
+        add_para(tf, sub, 9, TEXT_MUTED, align=PP_ALIGN.CENTER)
+
+    # Benchmark Table (left bottom)
+    card_rect(s, Inches(0.9), Inches(3.65), Inches(6.0), Inches(3.5), BG_OFFWHITE, BORDER_LIGHT)
+    tf = text_box(s, Inches(1.15), Inches(3.75), Inches(5.5), Inches(3.2))
     p = tf.paragraphs[0]
-    p.text = "Real-Time Metric Ground Navigation Under Geometric Degeneracy & Scale Drift"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(16); p.font.bold = True; p.font.color.rgb = INDIGO_ACCENT
+    run = p.add_run(); run.text = "Ablation Benchmark Comparison"
+    run.font.name = FONT_TITLE; run.font.size = Pt(14)
+    run.font.bold = True; run.font.color.rgb = TEXT_BLACK
 
-    # Two Split Cards at bottom for Presenter info & Live System Links
-    card_w = Inches(5.25)
+    rows = [
+        ("Method Variant", "ATE RMSE", "RPE Drift", "FPS", True, GREEN_PRIMARY),
+        ("1.  Monocular 5-Pt VO", "26.31 m", "16.14%", "68.4", False, TEXT_MUTED),
+        ("2.  Pure Stereo VO", "5.42 m", "3.32%", "64.1", False, TEXT_BODY),
+        ("3.  Stereo + Failure Gating", "4.18 m", "2.56%", "62.7", False, TEXT_BODY),
+        ("4.  Full System (Ours)", "3.06 m", "1.87%", "60.9", True, GREEN_PRIMARY),
+    ]
+    for j, (meth, ate, rpe, fps, bold, color) in enumerate(rows):
+        txt = f"{meth:<30s} {ate:<12s} {rpe:<12s} {fps}"
+        add_para(tf, txt, 11, color, bold, FONT_CODE, spacing_before=6 if j == 0 else 3)
+
+    # Ablation Chart (right — FULL HEIGHT for bigger image)
+    card_rect(s, Inches(7.2), Inches(1.3), Inches(5.533), Inches(5.85), SURFACE_MINT, BORDER_GREEN)
+    fit_picture(s, "docs/figures/fig8_ablation_barchart.png", 7.3, 1.4, 5.333, 5.55)
+
+    # ══════════════════════════════════════════════════════════════════
+    #  SLIDE 6 — REAL-WORLD HIGHWAY VALIDATION
+    # ══════════════════════════════════════════════════════════════════
+    s = prs.slides.add_slide(blank)
+    white_bg(s); top_bar(s, 6)
+    section_title(s, "Real-World Highway Validation & Error Diagnosis")
+
+    # Left: Analysis panel (narrower — give more space to image)
+    card_rect(s, Inches(0.9), Inches(1.3), Inches(5.0), Inches(5.8), BG_OFFWHITE, BORDER_LIGHT)
+    tf = text_box(s, Inches(1.15), Inches(1.5), Inches(4.5), Inches(5.5))
+
+    p = tf.paragraphs[0]
+    run = p.add_run(); run.text = "The 80° Visual Perception Paradox"
+    run.font.name = FONT_TITLE; run.font.size = Pt(17)
+    run.font.bold = True; run.font.color.rgb = TEXT_BLACK
+
+    analysis_items = [
+        ("Empirical Observation", "Human viewers perceive an abrupt ~80° right turn in dashcam footage. However, the BEV trajectory measures a gentle 10°–20° curve.", GREEN_PRIMARY),
+        ("AASHTO Ground Truth", "Highway design standards mandate curvature radii R ≥ 250–400 m at 80–100 km/h. Over a 200 m arc segment, the physical angular change is bounded: Δθ ≈ 15°.", GREEN_MID),
+        ("Optical Root Cause", "At highway distances (Z > 50 m), flow vectors become near-parallel. Chassis pitch-roll vibrations create apparent angular shifts, causing observers to overestimate yaw rotation.", GREEN_LIGHT),
+        ("Conclusion", "The system's bird's-eye trajectory correctly captures physical ground truth, debunking the optical illusion of an 80° turn.", GREEN_DARK),
+    ]
+    for label, desc, accent in analysis_items:
+        add_para(tf, "", 4, TEXT_MUTED, spacing_before=10)
+        # Label
+        p = tf.add_paragraph()
+        run = p.add_run(); run.text = f"  ● {label}"
+        run.font.name = FONT_TITLE; run.font.size = Pt(12)
+        run.font.bold = True; run.font.color.rgb = accent
+        # Description
+        p = tf.add_paragraph()
+        run = p.add_run(); run.text = f"    {desc}"
+        run.font.name = FONT_BODY; run.font.size = Pt(10.5)
+        run.font.color.rgb = TEXT_BODY
+
+    # Right: BEV trajectory image (BIGGER)
+    card_rect(s, Inches(6.2), Inches(1.3), Inches(6.433), Inches(5.8), SURFACE_MINT, BORDER_GREEN)
+    fit_picture(s, "docs/figures/fig6_real_driving_bev.png", 6.3, 1.45, 6.233, 5.2)
+    tf = text_box(s, Inches(6.3), Inches(6.55), Inches(6.233), Inches(0.4))
+    p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+    run = p.add_run(); run.text = "Fig 6: BEV trajectory — 1,260 highway frames (1.06 km)"
+    run.font.name = FONT_BODY; run.font.size = Pt(9); run.font.color.rgb = TEXT_MUTED
+
+    # ══════════════════════════════════════════════════════════════════
+    #  SLIDE 7 — DENSE 3D RECONSTRUCTION
+    # ══════════════════════════════════════════════════════════════════
+    s = prs.slides.add_slide(blank)
+    white_bg(s); top_bar(s, 7)
+    section_title(s, "Dense 3D Scene Reconstruction")
+
+    # Left: explanation (narrower for bigger image)
+    card_rect(s, Inches(0.9), Inches(1.3), Inches(5.0), Inches(5.8), BG_OFFWHITE, BORDER_LIGHT)
     
-    # Left Card: Academic Credentials
-    add_card(s1, Inches(1.2), Inches(4.05), card_w, Inches(2.4), CARD_BG_ALT, CARD_BORDER)
-    tb_c1 = s1.shapes.add_textbox(Inches(1.45), Inches(4.2), card_w - Inches(0.5), Inches(2.1))
-    tf1 = tb_c1.text_frame; tf1.word_wrap = True
+    recon_steps = [
+        ("Real-Time Depth (>150 FPS)", "Bilateral-guided geometric disparity filtering extracts dense per-pixel depth maps with edge-preserving filtering — no neural network required.", False),
+        ("Pinhole Back-Projection", "X_c  =  Z · K⁻¹ [ u,  v,  1 ]ᵀ", True),
+        ("World Frame Accumulation", "X_w  =  Rₜ · X_c  +  tₜ", True),
+        ("350,000+ Metric Vertices", "RGB-colored point cloud with true physical scale, exportable as standard .PLY format for downstream analysis.", False),
+        ("Interactive WebGL Viewer", "Embedded Three.js canvas in the web dashboard with WASD free-fly camera controls for real-time 3D exploration.", False),
+    ]
+    for i, (title, desc, is_formula) in enumerate(recon_steps):
+        y = Inches(1.5 + i * 1.08)
+        green_circle(s, Inches(1.1), y + Inches(0.05), Inches(0.35), icon_text=str(i+1))
+        tf = text_box(s, Inches(1.6), y - Inches(0.05), Inches(4.0), Inches(0.3))
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = title
+        run.font.name = FONT_TITLE; run.font.size = Pt(12)
+        run.font.bold = True; run.font.color.rgb = TEXT_BLACK
+        if is_formula:
+            # Formula in highlight box
+            formula_bg = card_rect(s, Inches(1.55), y + Inches(0.24), Inches(4.0), Inches(0.42), SURFACE_LIGHT, BORDER_GREEN)
+            tf = text_box(s, Inches(1.65), y + Inches(0.27), Inches(3.8), Inches(0.35))
+            p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+            run = p.add_run(); run.text = desc
+            run.font.name = "Cambria Math"; run.font.size = Pt(13)
+            run.font.bold = True; run.font.italic = True; run.font.color.rgb = GREEN_PRIMARY
+        else:
+            tf = text_box(s, Inches(1.6), y + Inches(0.26), Inches(4.0), Inches(0.75))
+            p = tf.paragraphs[0]
+            run = p.add_run(); run.text = desc
+            run.font.name = FONT_BODY; run.font.size = Pt(10)
+            run.font.color.rgb = TEXT_BODY
+
+    # Right: 3D pointcloud image (BIGGER)
+    card_rect(s, Inches(6.2), Inches(1.3), Inches(6.433), Inches(5.8), SURFACE_MINT, BORDER_GREEN)
+    fit_picture(s, "docs/figures/fig7_3d_pointcloud.png", 6.3, 1.45, 6.233, 5.2)
+    tf = text_box(s, Inches(6.3), Inches(6.55), Inches(6.233), Inches(0.4))
+    p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+    run = p.add_run(); run.text = "Fig 7: Reconstructed highway point cloud with perspective depth coloring"
+    run.font.name = FONT_BODY; run.font.size = Pt(9); run.font.color.rgb = TEXT_MUTED
+
+    # ══════════════════════════════════════════════════════════════════
+    #  SLIDE 8 — LIVE DASHBOARD & CLOUD DEPLOYMENT
+    # ══════════════════════════════════════════════════════════════════
+    s = prs.slides.add_slide(blank)
+    white_bg(s); top_bar(s, 8)
+    section_title(s, "Implementation & Live Cloud Deployment")
+
+    # Left: Dashboard Screenshot (BIGGER — wider)
+    card_rect(s, Inches(0.9), Inches(1.3), Inches(7.0), Inches(5.8), SURFACE_MINT, BORDER_GREEN)
+    fit_picture(s, "docs/figures/fig3b_real_dashboard.png", 1.0, 1.5, 6.8, 5.1)
+    tf = text_box(s, Inches(1.0), Inches(6.55), Inches(6.8), Inches(0.4))
+    p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+    run = p.add_run(); run.text = "Fig 8: Synchronized 4-Pane HUD — Flow Vectors, Depth Map, BEV Trajectory, Telemetry"
+    run.font.name = FONT_BODY; run.font.size = Pt(9); run.font.color.rgb = TEXT_MUTED
+
+    # Right: Feature cards stacked (narrower)
+    features = [
+        ("🎥", "On-The-Fly Video Processing", "Users upload custom MP4 dashcam footage; the engine tracks KLT features and depth dynamically frame-by-frame."),
+        ("🌐", "Zero-GPU Cloud Deployment", "Optimized OpenCV-headless pipeline runs on standard CPU containers — no GPU or PyTorch required."),
+        ("📹", "Browser H.264 Playback", "Pre-rendered output videos encoded with H.264 (yuv420p) play natively in all modern browsers."),
+        ("☁️", "Public Streamlit Cloud URL", "https://qgqccuvxnhc3gp32otvk6t.streamlit.app/"),
+    ]
+    for i, (icon, title, desc) in enumerate(features):
+        y = Inches(1.3 + i * 1.4)
+        card_rect(s, Inches(8.2), y, Inches(4.233), Inches(1.2),
+                  SURFACE_LIGHT if i % 2 == 0 else BG_OFFWHITE,
+                  BORDER_GREEN if i == 3 else BORDER_LIGHT)
+        # Icon circle
+        green_circle(s, Inches(8.35), y + Inches(0.2), Inches(0.45), icon_text=icon)
+        # Title
+        tf = text_box(s, Inches(8.95), y + Inches(0.1), Inches(3.38), Inches(0.3))
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = title
+        run.font.name = FONT_TITLE; run.font.size = Pt(12)
+        run.font.bold = True; run.font.color.rgb = TEXT_BLACK
+        # Desc
+        tf = text_box(s, Inches(8.95), y + Inches(0.42), Inches(3.38), Inches(0.65))
+        p = tf.paragraphs[0]
+        is_url = desc.startswith("http")
+        run = p.add_run(); run.text = desc
+        run.font.name = FONT_CODE if is_url else FONT_BODY
+        run.font.size = Pt(10.5 if is_url else 10)
+        run.font.bold = is_url
+        run.font.color.rgb = GREEN_PRIMARY if is_url else TEXT_BODY
+
+    # ══════════════════════════════════════════════════════════════════
+    #  SLIDE 9 — CONCLUSION, FUTURE SCOPE & THANK YOU
+    # ══════════════════════════════════════════════════════════════════
+    s = prs.slides.add_slide(blank)
+    white_bg(s); top_bar(s, 9)
+    section_title(s, "Conclusion & Future Scope")
+
+    # Three column layout
+    col_w = Inches(3.64); gap = Inches(0.4); col_top = Inches(1.3)
+
+    # Column 1: Key Takeaways
+    card_rect(s, Inches(0.9), col_top, col_w, Inches(4.2), BG_OFFWHITE, BORDER_LIGHT)
+    # Header bar
+    bar = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0.9), col_top, col_w, Inches(0.5))
+    bar.fill.solid(); bar.fill.fore_color.rgb = GREEN_DARK; bar.line.fill.background()
+    tf = bar.text_frame; tf.margin_left = Pt(16); tf.margin_top = Pt(4)
+    p = tf.paragraphs[0]; run = p.add_run(); run.text = "Key Contributions"
+    run.font.name = FONT_TITLE; run.font.size = Pt(13); run.font.bold = True; run.font.color.rgb = BG_WHITE
+
+    takeaways = [
+        "Scale drift eliminated — metric stereo baseline (b = 0.54 m) achieves 8.60× ATE improvement.",
+        "Automated failure-gating handles planar degeneracy and motion blur without manual intervention.",
+        "Real-time 60.9 FPS execution on commodity CPU hardware with sliding-window BA optimization.",
+        "Dense 3D reconstruction generates 350K+ metric RGB point cloud vertices from monocular + stereo input.",
+    ]
+    for i, item in enumerate(takeaways):
+        y = col_top + Inches(0.65 + i * 0.85)
+        green_circle(s, Inches(1.1), y + Inches(0.02), Inches(0.25), icon_text="✓")
+        tf = text_box(s, Inches(1.5), y - Inches(0.05), Inches(2.8), Inches(0.8))
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = item
+        run.font.name = FONT_BODY; run.font.size = Pt(10.5)
+        run.font.color.rgb = TEXT_BODY
+
+    # Column 2: Future Scope
+    cx2 = Inches(0.9) + col_w + gap
+    card_rect(s, cx2, col_top, col_w, Inches(4.2), BG_OFFWHITE, BORDER_LIGHT)
+    bar = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, cx2, col_top, col_w, Inches(0.5))
+    bar.fill.solid(); bar.fill.fore_color.rgb = GREEN_PRIMARY; bar.line.fill.background()
+    tf = bar.text_frame; tf.margin_left = Pt(16); tf.margin_top = Pt(4)
+    p = tf.paragraphs[0]; run = p.add_run(); run.text = "Future Research Directions"
+    run.font.name = FONT_TITLE; run.font.size = Pt(13); run.font.bold = True; run.font.color.rgb = BG_WHITE
+
+    futures = [
+        ("Factor-Graph VIO", "Integrate GTSAM iSAM2 with IMU preintegration for high-frequency inertial priors during rapid maneuvers."),
+        ("3D Gaussian Splatting", "Extend sparse point clouds into real-time radiance splats for continuous novel-view road synthesis."),
+        ("Loop Closure (DBoW2)", "Bag-of-words place recognition to detect and correct accumulated drift on multi-kilometer routes."),
+    ]
+    for i, (title, desc) in enumerate(futures):
+        y = col_top + Inches(0.7 + i * 1.15)
+        green_circle(s, cx2 + Inches(0.2), y + Inches(0.02), Inches(0.25), icon_text="→")
+        tf = text_box(s, cx2 + Inches(0.55), y - Inches(0.05), Inches(2.85), Inches(0.3))
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = title
+        run.font.name = FONT_TITLE; run.font.size = Pt(11)
+        run.font.bold = True; run.font.color.rgb = GREEN_PRIMARY
+        tf = text_box(s, cx2 + Inches(0.55), y + Inches(0.25), Inches(2.85), Inches(0.8))
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = desc
+        run.font.name = FONT_BODY; run.font.size = Pt(10)
+        run.font.color.rgb = TEXT_BODY
+
+    # Column 3: Thank You / Deliverables
+    cx3 = Inches(0.9) + (col_w + gap) * 2
+    card_rect(s, cx3, col_top, col_w, Inches(4.2), SURFACE_MINT, BORDER_GREEN)
+    bar = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, cx3, col_top, col_w, Inches(0.5))
+    bar.fill.solid(); bar.fill.fore_color.rgb = GREEN_MID; bar.line.fill.background()
+    tf = bar.text_frame; tf.margin_left = Pt(16); tf.margin_top = Pt(4)
+    p = tf.paragraphs[0]; run = p.add_run(); run.text = "Project Deliverables"
+    run.font.name = FONT_TITLE; run.font.size = Pt(13); run.font.bold = True; run.font.color.rgb = BG_WHITE
+
+    deliverables = [
+        ("📄 IEEE Research Paper", "8–10 page report with 20 mathematical derivations and benchmark comparisons."),
+        ("🌐 Live Interactive Web App", "Deployed on Streamlit Cloud for live grading and peer testing."),
+        ("📦 Open-Source GitHub Repo", "Complete source code, test suites, trained assets, and documentation."),
+    ]
+    for i, (title, desc) in enumerate(deliverables):
+        y = col_top + Inches(0.7 + i * 1.15)
+        tf = text_box(s, cx3 + Inches(0.25), y - Inches(0.05), Inches(3.1), Inches(0.3))
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = title
+        run.font.name = FONT_TITLE; run.font.size = Pt(11)
+        run.font.bold = True; run.font.color.rgb = TEXT_BLACK
+        tf = text_box(s, cx3 + Inches(0.25), y + Inches(0.25), Inches(3.1), Inches(0.7))
+        p = tf.paragraphs[0]
+        run = p.add_run(); run.text = desc
+        run.font.name = FONT_BODY; run.font.size = Pt(10)
+        run.font.color.rgb = TEXT_BODY
+
+    # Thank You Banner at bottom
+    banner = card_rect(s, Inches(0.9), Inches(5.8), Inches(11.533), Inches(1.2), GREEN_PRIMARY)
+    tf = banner.text_frame
+    tf.margin_left = Pt(20); tf.margin_top = Pt(8)
+    p = tf.paragraphs[0]; p.alignment = PP_ALIGN.CENTER
+    run = p.add_run(); run.text = "Thank You"
+    run.font.name = FONT_TITLE; run.font.size = Pt(28)
+    run.font.bold = True; run.font.color.rgb = BG_WHITE
+    p = tf.add_paragraph(); p.alignment = PP_ALIGN.CENTER
+    run = p.add_run(); run.text = "Open for Class Discussion & Questions"
+    run.font.name = FONT_BODY; run.font.size = Pt(13)
+    run.font.color.rgb = GREEN_PALE
+
+    # ── Save ─────────────────────────────────────────────────────────
+    out = "docs/Visual_Odometry_Final_Presentation.pptx"
+    prs.save(out)
+    sz = os.path.getsize(out)
+    print(f"✓ Generated: {out} ({sz:,} bytes, {len(prs.slides)} slides)")
     
-    p = tf1.paragraphs[0]; p.text = "Candidate: Sidhant Kumar Panda"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(13); p.font.bold = True; p.font.color.rgb = TEXT_PURE_WHITE
-    
-    p = tf1.add_paragraph(); p.text = "Registration No: 12413416"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
+    for alt_name in ["docs/Visual_Odometry_Presentation_v2.pptx", "docs/Visual_Odometry_Project_Presentation.pptx"]:
+        try:
+            prs.save(alt_name)
+            print(f"✓ Synchronized: {alt_name}")
+        except Exception:
+            pass
 
-    p = tf1.add_paragraph(); p.text = "Project Guide: Abhishek Tiwari"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf1.add_paragraph(); p.text = "School of Computer Science and Engineering"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.color.rgb = TEXT_MUTED
-
-    p = tf1.add_paragraph(); p.text = "Division of Machine Intelligence & Computer Vision"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.color.rgb = TEXT_MUTED
-
-    # Right Card: Project Artifacts & Links
-    add_card(s1, Inches(6.883), Inches(4.05), card_w, Inches(2.4), CARD_BG_ALT, CARD_BORDER)
-    tb_c2 = s1.shapes.add_textbox(Inches(7.133), Inches(4.2), card_w - Inches(0.5), Inches(2.1))
-    tf2 = tb_c2.text_frame; tf2.word_wrap = True
-
-    p = tf2.paragraphs[0]; p.text = "Project Artifacts & Live Deployment"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(13); p.font.bold = True; p.font.color.rgb = TEXT_PURE_WHITE
-
-    p = tf2.add_paragraph(); p.text = "🌐 Live Interactive Cloud App:"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.color.rgb = TEXT_MUTED
-    p = tf2.add_paragraph(); p.text = "https://qgqccuvxnhc3gp32otvk6t.streamlit.app/"
-    p.font.name = "Consolas"; p.font.size = Pt(11); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
-
-    p = tf2.add_paragraph(); p.text = "📦 GitHub Open Source Repository:"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.color.rgb = TEXT_MUTED
-    p = tf2.add_paragraph(); p.text = "github.com/Siddhantpanda-labs/Visual-Odometry..."
-    p.font.name = "Consolas"; p.font.size = Pt(11); p.font.bold = True; p.font.color.rgb = EMERALD_ACCENT
-
-    # =========================================================================
-    # SLIDE 2: Problem Formulation: The 3 Core Failure Modes (Gamma 3-Col Card)
-    # =========================================================================
-    s2 = prs.slides.add_slide(blank_layout)
-    apply_slide_bg(s2)
-    add_eyebrow_header(s2, "PROBLEM FORMULATION & MOTIVATION", "Critical Failure Modes in Classical Monocular Odometry", AMBER_ACCENT)
-
-    card_w = Inches(3.64)
-    card_h = Inches(5.6)
-    card_top = Inches(1.4)
-    gap = Inches(0.4)
-
-    # Column Card 1: Scale Ambiguity
-    add_card(s2, Inches(0.8), card_top, card_w, card_h, CARD_BG, CARD_BORDER)
-    pill1 = add_card(s2, Inches(1.1), Inches(1.65), Inches(2.5), Inches(0.38), CARD_BG_ALT, AMBER_ACCENT)
-    tb = s2.shapes.add_textbox(Inches(1.2), Inches(1.7), Inches(2.3), Inches(0.3))
-    p = tb.text_frame.paragraphs[0]; p.text = "01 · SCALE AMBIGUITY"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(10); p.font.bold = True; p.font.color.rgb = AMBER_ACCENT
-
-    tb_c1 = s2.shapes.add_textbox(Inches(1.1), Inches(2.2), Inches(3.04), Inches(4.6))
-    tf = tb_c1.text_frame; tf.word_wrap = True
-    p = tf.paragraphs[0]; p.text = "Unconstrained Scale Drift"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(16); p.font.bold = True; p.font.color.rgb = TEXT_PURE_WHITE
-
-    p = tf.add_paragraph()
-    p.text = "\n• Inherent Epipolar Ambiguity:\nMonocular geometry only recovers translation direction, leaving absolute metric scale factor s_t unknown (s_t ∈ ℝ⁺)."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n• Quadratic Compounding:\nSmall scale estimation errors multiply recursively, generating >16% trajectory dilation over extended highway driving."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n• Autonomous Impact:\nVehicle cannot distinguish high-speed highway cruising from low-speed crawling without external sensors."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.color.rgb = TEXT_MUTED
-
-    # Column Card 2: Motion Blur
-    add_card(s2, Inches(0.8) + card_w + gap, card_top, card_w, card_h, CARD_BG, CARD_BORDER)
-    pill2 = add_card(s2, Inches(0.8) + card_w + gap + Inches(0.3), Inches(1.65), Inches(2.5), Inches(0.38), CARD_BG_ALT, CYAN_ACCENT)
-    tb = s2.shapes.add_textbox(Inches(0.8) + card_w + gap + Inches(0.4), Inches(1.7), Inches(2.3), Inches(0.3))
-    p = tb.text_frame.paragraphs[0]; p.text = "02 · MOTION BLUR"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(10); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
-
-    tb_c2 = s2.shapes.add_textbox(Inches(0.8) + card_w + gap + Inches(0.3), Inches(2.2), Inches(3.04), Inches(4.6))
-    tf = tb_c2.text_frame; tf.word_wrap = True
-    p = tf.paragraphs[0]; p.text = "Motion Blur & Track Loss"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(16); p.font.bold = True; p.font.color.rgb = TEXT_PURE_WHITE
-
-    p = tf.add_paragraph()
-    p.text = "\n• Highway Chassis Dynamics:\nPavement bumps and engine vibrations blur high-frequency visual gradients in forward-facing cameras."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n• Gradient Dissipation:\nSpatial derivatives Ix, Iy degrade; the Harris corner score collapses below threshold τ, shedding valid feature points."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n• Tracking Discontinuity:\nStandard systems drop to 0 active tracks and crash without recovery or re-initialization mechanisms."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.color.rgb = TEXT_MUTED
-
-    # Column Card 3: Planar Road Degeneracy
-    add_card(s2, Inches(0.8) + (card_w + gap) * 2, card_top, card_w, card_h, CARD_BG, CARD_BORDER)
-    pill3 = add_card(s2, Inches(0.8) + (card_w + gap) * 2 + Inches(0.3), Inches(1.65), Inches(2.5), Inches(0.38), CARD_BG_ALT, INDIGO_ACCENT)
-    tb = s2.shapes.add_textbox(Inches(0.8) + (card_w + gap) * 2 + Inches(0.4), Inches(1.7), Inches(2.3), Inches(0.3))
-    p = tb.text_frame.paragraphs[0]; p.text = "03 · PLANAR DEGENERACY"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(10); p.font.bold = True; p.font.color.rgb = INDIGO_ACCENT
-
-    tb_c3 = s2.shapes.add_textbox(Inches(0.8) + (card_w + gap) * 2 + Inches(0.3), Inches(2.2), Inches(3.04), Inches(4.6))
-    tf = tb_c3.text_frame; tf.word_wrap = True
-    p = tf.paragraphs[0]; p.text = "Planar Road Degeneracy"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(16); p.font.bold = True; p.font.color.rgb = TEXT_PURE_WHITE
-
-    p = tf.add_paragraph()
-    p.text = "\n• Homography Domination:\nWhen visual features are coplanar on flat asphalt, the 8-point Essential Matrix E solver becomes mathematically degenerate."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n• Rotational Ambiguity:\nDecomposing degenerate E yields two mathematically valid rotations, frequently choosing the false 'ghost' rotation."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n• Catastrophic Twisting:\nStandard RANSAC selects false motion vectors, twisting straight driving trajectories into fictitious spirals."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.color.rgb = TEXT_MUTED
-
-    # =========================================================================
-    # SLIDE 3: System Architecture & Automated Failure-Gating State Machine
-    # =========================================================================
-    s3 = prs.slides.add_slide(blank_layout)
-    apply_slide_bg(s3)
-    add_eyebrow_header(s3, "SYSTEM ARCHITECTURE & CONTROL FLOW", "Dual-Pipeline Perception Architecture & Failure-Gating State Machine", CYAN_ACCENT)
-
-    # Left: Explanation Card
-    left_w = Inches(5.6)
-    add_card(s3, Inches(0.8), Inches(1.4), left_w, Inches(5.6), CARD_BG, CARD_BORDER)
-
-    tb_arch = s3.shapes.add_textbox(Inches(1.1), Inches(1.65), left_w - Inches(0.6), Inches(5.1))
-    tf_arch = tb_arch.text_frame; tf_arch.word_wrap = True
-
-    p = tf_arch.paragraphs[0]; p.text = "Four-Stage Robust Processing Pipeline"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(16); p.font.bold = True; p.font.color.rgb = TEXT_PURE_WHITE
-
-    p = tf_arch.add_paragraph()
-    p.text = "\n1. Adaptive Radiometric Normalization:\nCLAHE (clip limit = 3.0, grid = 8x8) equalizes harsh windshield glare, sun reflections, and shadowed asphalt before feature detection."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_arch.add_paragraph()
-    p.text = "\n2. Pyramidal KLT with Bidirectional Check:\nExtracts 1,500 Shi-Tomasi corners across 4 pyramid scales. Enforces forward-backward flow consistency (||x_i - x̂_i||₂ < 1.0 px) to eliminate false correspondences."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_arch.add_paragraph()
-    p.text = "\n3. Automated Failure-Gating State Machine:\nTracks active inliers N and translation magnitude. Automatically switches between 5-point Essential Matrix and P3P RANSAC to avoid solver divergence."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_arch.add_paragraph()
-    p.text = "\n4. Multi-Sensor Modality & Graceful Fallback:\nCalibrated metric stereo (b = 0.54 m) serves as primary; gracefully degrades to robust monocular mode when secondary feed fails."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = CYAN_ACCENT
-
-    # Right: Embedded Architecture Diagram inside framed card
-    right_w = Inches(5.733)
-    add_card(s3, Inches(6.8), Inches(1.4), right_w, Inches(5.6), CARD_BG, CARD_BORDER)
-    add_fit_picture(s3, "docs/figures/fig1_architecture.png", 7.0, 1.7, 5.333, 4.6)
-
-    tb_cap = s3.shapes.add_textbox(Inches(7.0), Inches(6.45), Inches(5.333), Inches(0.4))
-    p = tb_cap.text_frame.paragraphs[0]
-    p.text = "Fig 1: Complete end-to-end perception pipeline with failure-gated state machine."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(10); p.font.color.rgb = TEXT_MUTED; p.alignment = PP_ALIGN.CENTER
-
-    # =========================================================================
-    # SLIDE 4: Metric Stereo Geometry & Local Bundle Adjustment
-    # =========================================================================
-    s4 = prs.slides.add_slide(blank_layout)
-    apply_slide_bg(s4)
-    add_eyebrow_header(s4, "MATHEMATICAL METHODOLOGY", "Calibrated Stereo Metric Triangulation & Local Bundle Adjustment", INDIGO_ACCENT)
-
-    card_w2 = Inches(5.666)
-    
-    # Left Card: Stereo Triangulation
-    add_card(s4, Inches(0.8), Inches(1.4), card_w2, Inches(5.6), CARD_BG, CARD_BORDER)
-    tb_st = s4.shapes.add_textbox(Inches(1.1), Inches(1.65), card_w2 - Inches(0.6), Inches(5.1))
-    tf_st = tb_st.text_frame; tf_st.word_wrap = True
-
-    p = tf_st.paragraphs[0]; p.text = "Calibrated Metric Scale Recovery"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(17); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
-
-    p = tf_st.add_paragraph()
-    p.text = "\n• Exploitation of Known Physical Baseline:\nCalibrated stereo baseline b = 0.54 m between left and right optical centers introduces metric scale observability at every frame."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_st.add_paragraph()
-    p.text = "\n• Closed-Form Metric Depth Triangulation:\nFor each matched stereo correspondence (u_L, v) and (u_R, v), horizontal disparity d = u_L - u_R yields absolute metric depth:"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_st.add_paragraph()
-    p.text = "\n    Z = ( f · b ) / d    |    X = (u - cx) · Z / f    |    Y = (v - cy) · Z / f"
-    p.font.name = "Consolas"; p.font.size = Pt(13); p.font.bold = True; p.font.color.rgb = TEXT_CODE
-
-    p = tf_st.add_paragraph()
-    p.text = "\n• Scale Invariance Guarantee:\nLandmark coordinates X_j are instantiated directly in true physical meters, preventing speed ambiguity and trajectory scale inflation."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_st.add_paragraph()
-    p.text = "\n• Quadratic Depth Uncertainty: δZ = (Z² / (f·b)) · δd provides sub-decimeter depth resolution up to 45 meters forward range."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.color.rgb = TEXT_MUTED
-
-    # Right Card: Sliding-Window Bundle Adjustment
-    add_card(s4, Inches(6.866), Inches(1.4), card_w2, Inches(5.6), CARD_BG, CARD_BORDER)
-    tb_ba = s4.shapes.add_textbox(Inches(7.166), Inches(1.65), card_w2 - Inches(0.6), Inches(5.1))
-    tf_ba = tb_ba.text_frame; tf_ba.word_wrap = True
-
-    p = tf_ba.paragraphs[0]; p.text = "Sliding-Window Bundle Adjustment (BA)"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(17); p.font.bold = True; p.font.color.rgb = INDIGO_ACCENT
-
-    p = tf_ba.add_paragraph()
-    p.text = "\n• Joint Non-Linear Optimization:\nJointly refines the last W = 5 camera poses T_k = [R_k | t_k] and 3D landmark positions X_j across temporal observations."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_ba.add_paragraph()
-    p.text = "\n• Robust Huber Loss Reprojection Formulation:\nSuppresses highway asphalt glare and moving vehicle outlier tracks:"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_ba.add_paragraph()
-    p.text = "\n    min_{T_k, X_j}  Σ  ρ_Huber( || u_{i,k} - π(T_k, X_j) ||² )"
-    p.font.name = "Consolas"; p.font.size = Pt(13); p.font.bold = True; p.font.color.rgb = TEXT_CODE
-
-    p = tf_ba.add_paragraph()
-    p.text = "\n• Levenberg-Marquardt Solver:\nDamped Hessian (Jᵀ J + λ diag(Jᵀ J)) Δξ = -Jᵀ r achieves rapid quadratic convergence within 8-12 iterations per keyframe."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_ba.add_paragraph()
-    p.text = "\n• Strict O(W) Constant Bound:\nFixed-lag sliding window ensures deterministic real-time execution with zero memory growth."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.color.rgb = TEXT_MUTED
-
-    # =========================================================================
-    # SLIDE 5: Empirical Benchmark & Ablation Study (Gamma Stats & Grid)
-    # =========================================================================
-    s5 = prs.slides.add_slide(blank_layout)
-    apply_slide_bg(s5)
-    add_eyebrow_header(s5, "EMPIRICAL BENCHMARK & PERFORMANCE ABLATION", "Rigorous Quantitative Ablation Across 450 Controlled Frames", EMERALD_ACCENT)
-
-    # 3 Stat KPI Cards at Top (Gamma Style)
-    kpi_w = Inches(3.64)
-    kpi_h = Inches(1.35)
-    gap = Inches(0.4)
-
-    # KPI 1
-    add_card(s5, Inches(0.8), Inches(1.4), kpi_w, kpi_h, CARD_BG, EMERALD_ACCENT, 1.5)
-    tb = s5.shapes.add_textbox(Inches(1.0), Inches(1.45), kpi_w - Inches(0.4), kpi_h - Inches(0.1))
-    p = tb.text_frame.paragraphs[0]; p.text = "8.60× DRIFT REDUCTION"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(18); p.font.bold = True; p.font.color.rgb = EMERALD_ACCENT
-    p = tb.text_frame.add_paragraph(); p.text = "ATE RMSE dropped from 26.31 m to 3.06 m"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.bold = True; p.font.color.rgb = TEXT_BRIGHT
-
-    # KPI 2
-    add_card(s5, Inches(0.8) + kpi_w + gap, Inches(1.4), kpi_w, kpi_h, CARD_BG, CYAN_ACCENT, 1.5)
-    tb = s5.shapes.add_textbox(Inches(0.8) + kpi_w + gap + Inches(0.2), Inches(1.45), kpi_w - Inches(0.4), kpi_h - Inches(0.1))
-    p = tb.text_frame.paragraphs[0]; p.text = "1.87% POSE ERROR"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(18); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
-    p = tb.text_frame.add_paragraph(); p.text = "Relative Pose Error (RPE) across 450 frames"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.bold = True; p.font.color.rgb = TEXT_BRIGHT
-
-    # KPI 3
-    add_card(s5, Inches(0.8) + (kpi_w + gap) * 2, Inches(1.4), kpi_w, kpi_h, CARD_BG, INDIGO_ACCENT, 1.5)
-    tb = s5.shapes.add_textbox(Inches(0.8) + (kpi_w + gap) * 2 + Inches(0.2), Inches(1.45), kpi_w - Inches(0.4), kpi_h - Inches(0.1))
-    p = tb.text_frame.paragraphs[0]; p.text = "60.9 FPS REAL-TIME"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(18); p.font.bold = True; p.font.color.rgb = INDIGO_ACCENT
-    p = tb.text_frame.add_paragraph(); p.text = "End-to-end multi-threaded perception latency"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.bold = True; p.font.color.rgb = TEXT_BRIGHT
-
-    # Bottom Split: Left Table, Right Ablation Bar Chart
-    add_card(s5, Inches(0.8), Inches(3.0), Inches(5.8), Inches(4.0), CARD_BG, CARD_BORDER)
-    tb_tbl = s5.shapes.add_textbox(Inches(1.05), Inches(3.15), Inches(5.3), Inches(3.6))
-    tf_tbl = tb_tbl.text_frame; tf_tbl.word_wrap = True
-
-    p = tf_tbl.paragraphs[0]; p.text = "Algorithmic Ablation Benchmark Table"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(15); p.font.bold = True; p.font.color.rgb = TEXT_PURE_WHITE
-
-    p = tf_tbl.add_paragraph()
-    p.text = "\nMethod Variant           ATE RMSE    RPE Drift    FPS"
-    p.font.name = "Consolas"; p.font.size = Pt(12); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
-
-    p = tf_tbl.add_paragraph()
-    p.text = "--------------------------------------------------------"
-    p.font.name = "Consolas"; p.font.size = Pt(11); p.font.color.rgb = CARD_BORDER
-
-    p = tf_tbl.add_paragraph()
-    p.text = "1. Monocular 5-Pt VO     26.31 m     16.14%      68.4"
-    p.font.name = "Consolas"; p.font.size = Pt(12); p.font.color.rgb = TEXT_MUTED
-
-    p = tf_tbl.add_paragraph()
-    p.text = "2. Pure Stereo VO         5.42 m      3.32%      64.1"
-    p.font.name = "Consolas"; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_tbl.add_paragraph()
-    p.text = "3. Stereo + Gating        4.18 m      2.56%      62.7"
-    p.font.name = "Consolas"; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_tbl.add_paragraph()
-    p.text = "4. Ours (Full System)     3.06 m      1.87%      60.9"
-    p.font.name = "Consolas"; p.font.size = Pt(13); p.font.bold = True; p.font.color.rgb = EMERALD_ACCENT
-
-    p = tf_tbl.add_paragraph()
-    p.text = "\n• Takeaway: Failure-gating stops turn divergence; bundle adjustment eliminates micro-jitter, achieving state-of-the-art accuracy."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.color.rgb = TEXT_BRIGHT
-
-    # Right: Ablation Bar Chart
-    add_card(s5, Inches(6.9), Inches(3.0), Inches(5.633), Inches(4.0), CARD_BG, CARD_BORDER)
-    add_fit_picture(s5, "docs/figures/fig8_ablation_barchart.png", 7.05, 3.2, 5.333, 3.5)
-
-    # =========================================================================
-    # SLIDE 6: Highway Driving Validation & Curvature Diagnosis
-    # =========================================================================
-    s6 = prs.slides.add_slide(blank_layout)
-    apply_slide_bg(s6)
-    add_eyebrow_header(s6, "EXPERIMENTAL VALIDATION & ERROR DIAGNOSIS", "Highway Driving Trajectory & Mathematical Turn Diagnosis", AMBER_ACCENT)
-
-    # Left: Technical Analysis Card
-    add_card(s6, Inches(0.8), Inches(1.4), Inches(5.6), Inches(5.6), CARD_BG, CARD_BORDER)
-    tb_turn = s6.shapes.add_textbox(Inches(1.1), Inches(1.65), Inches(5.0), Inches(5.1))
-    tf_turn = tb_turn.text_frame; tf_turn.word_wrap = True
-
-    p = tf_turn.paragraphs[0]; p.text = "The 80° Visual Perception Paradox"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(16); p.font.bold = True; p.font.color.rgb = AMBER_ACCENT
-
-    p = tf_turn.add_paragraph()
-    p.text = "\n• The Empirical Observation:\nDuring human playback of dashcam video, an extended curved bend visually resembles an abrupt ~80° rightward turn. However, the estimated BEV bird's-eye trajectory measures a gradual 10°-20° curve."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_turn.add_paragraph()
-    p.text = "\n• Ground Truth: Civil Engineering Constraints:\nAASHTO & Highway Design Standards mandate minimum curvature radii R ≥ 250-400 m for 80-100 km/h highways. Across a 200 m segment, the physical angular change is mathematically bounded to Δθ ≈ 15°."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_turn.add_paragraph()
-    p.text = "\n• Optical Root Cause (Epipolar Ray Ambiguity):\nAt highway distances (Z > 50 m), optical flow rays become near-parallel. Vehicle chassis pitch and roll vibrations create apparent angular shifts, causing human observers to overestimate rotational yaw."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_turn.add_paragraph()
-    p.text = "\n• Conclusion: The system's bird's-eye trajectory correctly captures physical ground truth, debunking the optical illusion of an 80° turn."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
-
-    # Right: Embedded BEV Plot
-    add_card(s6, Inches(6.7), Inches(1.4), Inches(5.833), Inches(5.6), CARD_BG, CARD_BORDER)
-    add_fit_picture(s6, "docs/figures/fig6_real_driving_bev.png", 6.85, 1.8, 5.533, 4.4)
-
-    tb_bev = s6.shapes.add_textbox(Inches(6.85), Inches(6.4), Inches(5.533), Inches(0.4))
-    p = tb_bev.text_frame.paragraphs[0]
-    p.text = "Fig 6: Bird's-Eye View (BEV) trajectory across 1,260 real-world highway frames (1.06 km)."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(10); p.font.color.rgb = TEXT_MUTED; p.alignment = PP_ALIGN.CENTER
-
-    # =========================================================================
-    # SLIDE 7: Dense 3D Point Cloud & WebGL Reconstruction
-    # =========================================================================
-    s7 = prs.slides.add_slide(blank_layout)
-    apply_slide_bg(s7)
-    add_eyebrow_header(s7, "3D SPATIAL PERCEPTION", "Dense 3D Scene Reconstruction & Interactive WebGL Navigation", CYAN_ACCENT)
-
-    # Left: Explanation Card
-    add_card(s7, Inches(0.8), Inches(1.4), Inches(5.6), Inches(5.6), CARD_BG, CARD_BORDER)
-    tb_pc = s7.shapes.add_textbox(Inches(1.1), Inches(1.65), Inches(5.0), Inches(5.1))
-    tf_pc = tb_pc.text_frame; tf_pc.word_wrap = True
-
-    p = tf_pc.paragraphs[0]; p.text = "Dense Metric Point Cloud Pipeline"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(16); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
-
-    p = tf_pc.add_paragraph()
-    p.text = "\n• Real-Time Depth Generation (>150 FPS):\nBilateral-guided geometric disparity filtering extracts dense per-pixel depth maps with edge-preserving filtering, eliminating heavy neural network latency."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_pc.add_paragraph()
-    p.text = "\n• Pinhole Camera Back-Projection:\nBack-projects image plane pixels (u, v) into metric 3D camera coordinates:"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_pc.add_paragraph()
-    p.text = "\n    X_c = Z · K⁻¹ [ u, v, 1 ]ᵀ"
-    p.font.name = "Consolas"; p.font.size = Pt(13); p.font.bold = True; p.font.color.rgb = TEXT_CODE
-
-    p = tf_pc.add_paragraph()
-    p.text = "\n• World Frame Point Accumulation:\nAccumulating world points X_w = R_t X_c + t_t over 1,260 frames yields 350,000+ RGB-colored metric vertices."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_pc.add_paragraph()
-    p.text = "\n• Interactive WebGL Viewport:\nEmbedded Three.js canvas in the web dashboard provides seamless WASD free-fly camera navigation."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(11); p.font.color.rgb = TEXT_MUTED
-
-    # Right: Embedded 3D Point Cloud Picture
-    add_card(s7, Inches(6.7), Inches(1.4), Inches(5.833), Inches(5.6), CARD_BG, CARD_BORDER)
-    add_fit_picture(s7, "docs/figures/fig7_3d_pointcloud.png", 6.85, 1.8, 5.533, 4.4)
-
-    tb_pcc = s7.shapes.add_textbox(Inches(6.85), Inches(6.4), Inches(5.533), Inches(0.4))
-    p = tb_pcc.text_frame.paragraphs[0]
-    p.text = "Fig 7: Reconstructed highway point cloud in 3D WebGL space with perspective depth coloring."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(10); p.font.color.rgb = TEXT_MUTED; p.alignment = PP_ALIGN.CENTER
-
-    # =========================================================================
-    # SLIDE 8: Synchronized 4-Pane HUD & Live Streamlit Cloud Deployment
-    # =========================================================================
-    s8 = prs.slides.add_slide(blank_layout)
-    apply_slide_bg(s8)
-    add_eyebrow_header(s8, "SYSTEM IMPLEMENTATION & CLOUD DEPLOYMENT", "Synchronized 4-Pane HUD & Live Streamlit Cloud Architecture", INDIGO_ACCENT)
-
-    # Left: Dashboard Screenshot
-    add_card(s8, Inches(0.8), Inches(1.4), Inches(6.2), Inches(5.6), CARD_BG, CARD_BORDER)
-    add_fit_picture(s8, "docs/figures/fig3b_real_dashboard.png", 0.95, 1.8, 5.9, 4.4)
-
-    tb_hud = s8.shapes.add_textbox(Inches(0.95), Inches(6.4), Inches(5.9), Inches(0.4))
-    p = tb_hud.text_frame.paragraphs[0]
-    p.text = "Fig 8: Synchronized 4-Pane HUD: Flow Vectors, Depth Map, BEV Trajectory, Telemetry KPIs."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(10); p.font.color.rgb = TEXT_MUTED; p.alignment = PP_ALIGN.CENTER
-
-    # Right: Features & Live App
-    add_card(s8, Inches(7.3), Inches(1.4), Inches(5.233), Inches(5.6), CARD_BG, CARD_BORDER)
-    tb_feat = s8.shapes.add_textbox(Inches(7.55), Inches(1.65), Inches(4.733), Inches(5.1))
-    tf_feat = tb_feat.text_frame; tf_feat.word_wrap = True
-
-    p = tf_feat.paragraphs[0]; p.text = "Interactive Cloud Platform"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(16); p.font.bold = True; p.font.color.rgb = INDIGO_ACCENT
-
-    p = tf_feat.add_paragraph()
-    p.text = "\n• Live On-The-Fly Processing:\nUsers can upload custom MP4 dashcam videos; the engine tracks KLT features and computes depth dynamically frame-by-frame."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_feat.add_paragraph()
-    p.text = "\n• Browser H.264 Playback:\nPre-rendered video streams encoded with H.264 (yuv420p) play natively without third-party codecs."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_feat.add_paragraph()
-    p.text = "\n• Zero-GPU Cloud Deployment:\nOptimized OpenCV-headless fallback allows full cloud execution on standard CPU containers without crashing."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf_feat.add_paragraph()
-    p.text = "\n• Public Streamlit Cloud URL:\nhttps://qgqccuvxnhc3gp32otvk6t.streamlit.app/"
-    p.font.name = "Consolas"; p.font.size = Pt(11); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
-
-    # =========================================================================
-    # SLIDE 9: Academic Summary, Key Takeaways & Future Directions (Gamma Style)
-    # =========================================================================
-    s9 = prs.slides.add_slide(blank_layout)
-    apply_slide_bg(s9)
-    add_eyebrow_header(s9, "PROJECT SUMMARY & FUTURE RESEARCH", "Key Takeaways, Future Extensions & Academic Discussion", CYAN_ACCENT)
-
-    card_w = Inches(3.64)
-    card_h = Inches(5.6)
-    gap = Inches(0.4)
-
-    # Card 1: Key Contributions
-    add_card(s9, Inches(0.8), Inches(1.4), card_w, card_h, CARD_BG, CARD_BORDER)
-    pill1 = add_card(s9, Inches(1.05), Inches(1.65), Inches(2.2), Inches(0.38), CARD_BG_ALT, EMERALD_ACCENT)
-    tb = s9.shapes.add_textbox(Inches(1.15), Inches(1.7), Inches(2.0), Inches(0.3))
-    p = tb.text_frame.paragraphs[0]; p.text = "KEY TAKEAWAYS"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(10); p.font.bold = True; p.font.color.rgb = EMERALD_ACCENT
-
-    tb_c1 = s9.shapes.add_textbox(Inches(1.05), Inches(2.2), Inches(3.14), Inches(4.6))
-    tf = tb_c1.text_frame; tf.word_wrap = True
-    p = tf.paragraphs[0]; p.text = "Technical Achievements"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(16); p.font.bold = True; p.font.color.rgb = TEXT_PURE_WHITE
-
-    p = tf.add_paragraph()
-    p.text = "\n✔ Scale Drift Solved:\nMetric baseline triangulation (b = 0.54 m) eliminates monocular scale ambiguity, slashing drift by 8.60×."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n✔ Robust Failure Handling:\nBidirectional flow and automated P3P fallback protect against planar degeneracy and blur."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n✔ Real-Time Execution:\nLightweight sliding-window BA operates at 60.9 FPS on commodity CPU hardware."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    # Card 2: Future Directions
-    add_card(s9, Inches(0.8) + card_w + gap, Inches(1.4), card_w, card_h, CARD_BG, CARD_BORDER)
-    pill2 = add_card(s9, Inches(0.8) + card_w + gap + Inches(0.25), Inches(1.65), Inches(2.2), Inches(0.38), CARD_BG_ALT, CYAN_ACCENT)
-    tb = s9.shapes.add_textbox(Inches(0.8) + card_w + gap + Inches(0.35), Inches(1.7), Inches(2.0), Inches(0.3))
-    p = tb.text_frame.paragraphs[0]; p.text = "FUTURE EXTENSIONS"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(10); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
-
-    tb_c2 = s9.shapes.add_textbox(Inches(0.8) + card_w + gap + Inches(0.25), Inches(2.2), Inches(3.14), Inches(4.6))
-    tf = tb_c2.text_frame; tf.word_wrap = True
-    p = tf.paragraphs[0]; p.text = "Future Research Avenues"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(16); p.font.bold = True; p.font.color.rgb = TEXT_PURE_WHITE
-
-    p = tf.add_paragraph()
-    p.text = "\n🔬 Factor-Graph VIO (GTSAM):\nIntegrate IMU preintegration factors (iSAM2) to provide high-frequency inertial priors during rapid vehicle maneuvers."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n🔬 3D Gaussian Splatting:\nExtend sparse point clouds into real-time radiance splats for continuous novel-view road synthesis."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n🔬 Global Loop Closure:\nIncorporate bag-of-words (DBoW2) place recognition to eliminate accumulated drift on multi-kilometer loops."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    # Card 3: Discussion & Deliverables
-    add_card(s9, Inches(0.8) + (card_w + gap) * 2, Inches(1.4), card_w, card_h, CARD_BG, CARD_BORDER)
-    pill3 = add_card(s9, Inches(0.8) + (card_w + gap) * 2 + Inches(0.25), Inches(1.65), Inches(2.2), Inches(0.38), CARD_BG_ALT, INDIGO_ACCENT)
-    tb = s9.shapes.add_textbox(Inches(0.8) + (card_w + gap) * 2 + Inches(0.35), Inches(1.7), Inches(2.0), Inches(0.3))
-    p = tb.text_frame.paragraphs[0]; p.text = "DELIVERABLES & Q&A"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(10); p.font.bold = True; p.font.color.rgb = INDIGO_ACCENT
-
-    tb_c3 = s9.shapes.add_textbox(Inches(0.8) + (card_w + gap) * 2 + Inches(0.25), Inches(2.2), Inches(3.14), Inches(4.6))
-    tf = tb_c3.text_frame; tf.word_wrap = True
-    p = tf.paragraphs[0]; p.text = "Project Wrap-Up"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(16); p.font.bold = True; p.font.color.rgb = TEXT_PURE_WHITE
-
-    p = tf.add_paragraph()
-    p.text = "\n📚 Formal IEEE Research Paper:\n8-10 page publication format with 20 native mathematical derivations and benchmark comparisons."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n🚀 Live Interactive Web App:\nDeployed on Streamlit Cloud for interactive grading and testing."
-    p.font.name = FONT_FAMILY; p.font.size = Pt(12); p.font.color.rgb = TEXT_BRIGHT
-
-    p = tf.add_paragraph()
-    p.text = "\n\n        THANK YOU!\n\nOpen for Class Discussion\n        & Questions"
-    p.font.name = FONT_FAMILY; p.font.size = Pt(14); p.font.bold = True; p.font.color.rgb = CYAN_ACCENT
-    p.alignment = PP_ALIGN.CENTER
-
-    output_path = "docs/Visual_Odometry_Project_Presentation.pptx"
-    prs.save(output_path)
-    print(f"Successfully generated: {output_path} (Size: {os.path.getsize(output_path):,} bytes)")
 
 if __name__ == "__main__":
-    create_deck()
+    create_presentation()

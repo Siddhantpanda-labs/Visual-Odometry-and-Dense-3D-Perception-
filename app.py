@@ -503,7 +503,7 @@ with tab_report:
                     use_container_width=True
                 )
     
-    pptx_path = "docs/Visual_Odometry_Project_Presentation.pptx" if os.path.exists("docs/Visual_Odometry_Project_Presentation.pptx") else "docs/Visual_Odometry_Defense_Presentation.pptx"
+    pptx_path = "docs/Visual_Odometry_Final_Presentation.pptx" if os.path.exists("docs/Visual_Odometry_Final_Presentation.pptx") else ("docs/Visual_Odometry_Project_Presentation.pptx" if os.path.exists("docs/Visual_Odometry_Project_Presentation.pptx") else "docs/Visual_Odometry_Presentation_v2.pptx")
     with col_d2:
         if os.path.exists(pptx_path):
             with open(pptx_path, "rb") as f:
