@@ -489,6 +489,18 @@ with tab_video:
 with tab_report:
     st.markdown("#### 📑 Formal IEEE Conference Report & Perception Deliverables")
     
+    zip_bundle = "docs/Visual_Odometry_Report_and_Presentation.zip" if os.path.exists("docs/Visual_Odometry_Report_and_Presentation.zip") else "Visual_Odometry_Report_and_Presentation.zip"
+    if os.path.exists(zip_bundle):
+        with open(zip_bundle, "rb") as f:
+            st.download_button(
+                label="📦 Download Complete Project Package (Report .docx + Presentation .pptx)",
+                data=f.read(),
+                file_name="Visual_Odometry_Report_and_Presentation_SidhantPanda.zip",
+                mime="application/zip",
+                use_container_width=True
+            )
+        st.markdown("")
+
     col_d1, col_d2, col_d3, col_d4 = st.columns(4)
     
     docx_path = "docs/IEEE_RESEARCH_REPORT_VISUAL_ODOMETRY_FINAL.docx" if os.path.exists("docs/IEEE_RESEARCH_REPORT_VISUAL_ODOMETRY_FINAL.docx") else "docs/IEEE_RESEARCH_REPORT_VISUAL_ODOMETRY.docx"
