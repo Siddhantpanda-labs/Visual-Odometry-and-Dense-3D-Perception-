@@ -259,39 +259,74 @@ else:
 # =============================================================================
 # FAST OPENCV CANVAS RENDERERS (High-Speed Real-Time Animation)
 # =============================================================================
-def draw_bev_canvas(trajectory, current_pos, current_yaw, w=640, h=440):
+def draw_bev_canvas(trajectory, current_pos, current_yaw, w=640, h=440, is_highway=False):
     canvas = np.zeros((h, w, 3), dtype=np.uint8)
     canvas[:] = (18, 24, 38) # Dark obsidian navy
 
-    min_x, max_x = -200.0, 50.0
-    min_z, max_z = -50.0, 1150.0
+    # Dynamic Auto-Zoom Bounding Box
+    all_pts = trajectory + [current_pos] if len(trajectory) > 0 else [current_pos]
+    xs = [p[0] for p in all_pts]
+    zs = [p[2] for p in all_pts]
+
+    raw_min_x, raw_max_x = min(xs), max(xs)
+    raw_min_z, raw_max_z = min(zs), max(zs)
+
+    span_x = max(raw_max_x - raw_min_x, 24.0)
+    span_z = max(raw_max_z - raw_min_z, 30.0)
+
+    # Dynamic margins (20% padding around active vehicle motion)
+    margin_x = max(span_x * 0.20, 8.0)
+    margin_z = max(span_z * 0.20, 8.0)
+
+    min_x = raw_min_x - margin_x
+    max_x = raw_max_x + margin_x
+    min_z = min(raw_min_z - margin_z, -5.0)
+    max_z = raw_max_z + margin_z
 
     def world_to_screen(x, z):
         u = int((x - min_x) / (max_x - min_x) * (w - 70) + 35)
         v = int((1.0 - (z - min_z) / (max_z - min_z)) * (h - 70) + 35)
         return u, v
 
-    # Grid lines
-    for gz in range(0, 1200, 200):
+    # Dynamic Adaptive Grid Lines
+    total_z_span = max_z - min_z
+    if total_z_span < 60:
+        grid_step = 10
+    elif total_z_span < 160:
+        grid_step = 25
+    elif total_z_span < 450:
+        grid_step = 50
+    else:
+        grid_step = 200
+
+    start_gz = int(np.floor(min_z / grid_step)) * grid_step
+    end_gz = int(np.ceil(max_z / grid_step)) * grid_step
+
+    for gz in range(start_gz, end_gz + grid_step, grid_step):
         _, v = world_to_screen(0, gz)
         if 0 <= v < h:
             cv2.line(canvas, (35, v), (w - 35, v), (30, 42, 60), 1)
             cv2.putText(canvas, f"{gz}m", (6, v + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.32, (100, 120, 150), 1)
 
-    for gx in range(-150, 50, 50):
+    grid_step_x = grid_step if grid_step <= 50 else 50
+    start_gx = int(np.floor(min_x / grid_step_x)) * grid_step_x
+    end_gx = int(np.ceil(max_x / grid_step_x)) * grid_step_x
+
+    for gx in range(start_gx, end_gx + grid_step_x, grid_step_x):
         u, _ = world_to_screen(gx, 0)
-        if 0 <= u < w:
+        if 35 <= u < w - 35:
             cv2.line(canvas, (u, 35), (u, h - 35), (30, 42, 60), 1)
             cv2.putText(canvas, f"{gx}m", (u - 15, h - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.32, (100, 120, 150), 1)
 
-    # AASHTO Highway Ground-Truth Reference Curve
-    t_ref = np.linspace(0, 1060, 50)
-    x_ref = -175.0 * np.sin(np.pi * t_ref / 1800.0)
-    ref_pts = [world_to_screen(x, z) for x, z in zip(x_ref, t_ref)]
-    for i in range(len(ref_pts) - 1):
-        cv2.line(canvas, ref_pts[i], ref_pts[i+1], (55, 75, 95), 1, cv2.LINE_AA)
+    # Highway Ground-Truth Reference Curve (Rendered when highway benchmark is active)
+    if is_highway and total_z_span > 200:
+        t_ref = np.linspace(0, min(1060, max_z), 50)
+        x_ref = -175.0 * np.sin(np.pi * t_ref / 1800.0)
+        ref_pts = [world_to_screen(x, z) for x, z in zip(x_ref, t_ref)]
+        for i in range(len(ref_pts) - 1):
+            cv2.line(canvas, ref_pts[i], ref_pts[i+1], (55, 75, 95), 1, cv2.LINE_AA)
 
-    # Trajectory History Trail (Glowing Cyan)
+    # Trajectory History Trail (Glowing Amber Gold)
     if len(trajectory) > 1:
         scr_pts = [world_to_screen(pt[0], pt[2]) for pt in trajectory]
         for i in range(len(scr_pts) - 1):
@@ -316,25 +351,43 @@ def draw_bev_canvas(trajectory, current_pos, current_yaw, w=640, h=440):
     cv2.arrowedLine(canvas, (cu, cv_pos), (hu, hv), (0, 255, 255), 2, tipLength=0.35)
 
     # HUD Overlay Badge inside canvas
-    cv2.rectangle(canvas, (w - 235, 10), (w - 10, 75), (10, 15, 25), -1)
-    cv2.rectangle(canvas, (w - 235, 10), (w - 10, 75), (56, 189, 248), 1)
-    cv2.putText(canvas, "LIVE BEV ESTIMATED TRAJECTORY", (w - 225, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (56, 189, 248), 1, cv2.LINE_AA)
-    cv2.putText(canvas, f"Pose: X={cx_w:.1f}m, Z={cy_w:.1f}m", (w - 225, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (240, 240, 240), 1)
-    cv2.putText(canvas, f"Heading Yaw: {current_yaw:+.1f} deg", (w - 225, 66), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (52, 211, 153), 1)
+    cv2.rectangle(canvas, (w - 250, 10), (w - 10, 80), (10, 15, 25), -1)
+    cv2.rectangle(canvas, (w - 250, 10), (w - 10, 80), (56, 189, 248), 1)
+    cv2.putText(canvas, "LIVE BEV ESTIMATED TRAJECTORY", (w - 240, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (56, 189, 248), 1, cv2.LINE_AA)
+    cv2.putText(canvas, f"Pose: X={cx_w:.1f}m, Z={cy_w:.1f}m", (w - 240, 44), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (240, 240, 240), 1)
+    cv2.putText(canvas, f"Heading Yaw: {current_yaw:+.1f} deg", (w - 240, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (52, 211, 153), 1)
+    cv2.putText(canvas, f"Dynamic Zoom: Span={total_z_span:.0f}m ({grid_step}m grid)", (w - 240, 74), cv2.FONT_HERSHEY_SIMPLEX, 0.30, (148, 163, 184), 1)
 
     return canvas
 
 def draw_3d_stationary_canvas(trajectory, current_pos, current_yaw, accumulated_3d_pts=None, w=640, h=440):
     """
-    Renders 3D Reconstruction on a completely stationary ground wireframe plane.
-    The wireframe grid is fixed in world space, allowing the examiner to see the car pointer
-    physically move across grid squares, advance forward, and turn as heading yaw changes.
+    Renders 3D Reconstruction on a stationary ground wireframe plane.
+    Dynamically auto-frames the 3D perspective based on the current trajectory span.
     """
     canvas = np.zeros((h, w, 3), dtype=np.uint8)
     canvas[:] = (10, 14, 22) # Deep futuristic space/night backdrop
 
-    cam_pos = np.array([240.0, 520.0, -320.0])
-    look_target = np.array([-80.0, 0.0, 480.0])
+    max_z_seen = max([p[2] for p in trajectory] + [current_pos[2], 25.0])
+    if max_z_seen < 120.0:
+        cam_pos = np.array([35.0, 75.0, -40.0])
+        look_target = np.array([0.0, 0.0, 50.0])
+        grid_z_step = 15
+        grid_z_max = 160
+        grid_x_min, grid_x_max, grid_x_step = -40, 45, 15
+    elif max_z_seen < 400.0:
+        cam_pos = np.array([100.0, 200.0, -110.0])
+        look_target = np.array([-20.0, 0.0, 180.0])
+        grid_z_step = 30
+        grid_z_max = 480
+        grid_x_min, grid_x_max, grid_x_step = -90, 70, 30
+    else:
+        cam_pos = np.array([240.0, 520.0, -320.0])
+        look_target = np.array([-80.0, 0.0, 480.0])
+        grid_z_step = 50
+        grid_z_max = 1200
+        grid_x_min, grid_x_max, grid_x_step = -200, 100, 40
+
     up = np.array([0.0, 1.0, 0.0])
 
     z_cam = look_target - cam_pos
@@ -361,44 +414,86 @@ def draw_3d_stationary_canvas(trajectory, current_pos, current_yaw, accumulated_
         return u, v
 
     # 1. FIXED STILL WIREFRAME GROUND PLANE (Anchored to world origin, completely stationary)
-    # Transverse grid lines (Z = 0, 50, 100, ..., 1150m)
-    for z_w in range(0, 1200, 50):
-        p1 = np.array([-200.0, 0.0, float(z_w)])
-        p2 = np.array([80.0, 0.0, float(z_w)])
+    for z_w in range(0, grid_z_max + grid_z_step, grid_z_step):
+        p1 = np.array([float(grid_x_min), 0.0, float(z_w)])
+        p2 = np.array([float(grid_x_max), 0.0, float(z_w)])
         u1, v1 = project(p1)
         u2, v2 = project(p2)
         if u1 is not None and u2 is not None:
-            alpha = max(0.18, 1.0 - z_w / 1250.0)
+            alpha = max(0.18, 1.0 - z_w / float(grid_z_max + 100))
             col = (int(42 * alpha), int(56 * alpha), int(76 * alpha))
             cv2.line(canvas, (u1, v1), (u2, v2), col, 1)
             # Distance labels along right edge of grid
-            if z_w in [0, 250, 500, 750, 1000]:
-                u_lbl, v_lbl = project(np.array([90.0, 0.0, float(z_w)]))
-                if u_lbl is not None and 0 <= u_lbl < w - 40 and 0 <= v_lbl < h:
-                    cv2.putText(canvas, f"{z_w}m", (u_lbl, v_lbl + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.28, (70, 95, 120), 1)
+            u_lbl, v_lbl = project(np.array([float(grid_x_max + 5), 0.0, float(z_w)]))
+            if u_lbl is not None and 0 <= u_lbl < w - 30 and 0 <= v_lbl < h:
+                cv2.putText(canvas, f"{z_w}m", (u_lbl, v_lbl + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.28, (70, 95, 120), 1)
 
-    # Longitudinal grid lines (X = -200, -160, ..., 80m)
-    for x_w in range(-200, 100, 40):
+    for x_w in range(grid_x_min, grid_x_max + grid_x_step, grid_x_step):
         p1 = np.array([float(x_w), 0.0, 0.0])
-        p2 = np.array([float(x_w), 0.0, 1150.0])
+        p2 = np.array([float(x_w), 0.0, float(grid_z_max)])
         u1, v1 = project(p1)
         u2, v2 = project(p2)
         if u1 is not None and u2 is not None:
             cv2.line(canvas, (u1, v1), (u2, v2), (32, 45, 62), 1)
 
-    # Highway Reference Corridor (Curving AASHTO Ground Plane Boundaries)
-    ref_l, ref_r = [], []
-    for z_ref in np.linspace(0, 1100, 45):
-        x_ref = -135.0 * (z_ref / 1100.0) ** 1.8
-        ul, vl = project(np.array([x_ref - 14.0, 0.0, z_ref]))
-        ur, vr = project(np.array([x_ref + 14.0, 0.0, z_ref]))
-        if ul is not None and 0 <= ul < w and 0 <= vl < h: ref_l.append((ul, vl))
-        if ur is not None and 0 <= ur < w and 0 <= vr < h: ref_r.append((ur, vr))
+    # 2. ACCUMULATED 3D POINT CLOUD (Triangulated landmarks fixed in 3D world space)
+    if accumulated_3d_pts is not None and len(accumulated_3d_pts) > 0:
+        for wpt in accumulated_3d_pts[-350:]:
+            u, v = project(np.array(wpt, dtype=np.float64))
+            if u is not None and 0 <= u < w and 0 <= v < h:
+                cv2.circle(canvas, (u, v), 2, (248, 189, 56), -1)
 
-    for pts in [ref_l, ref_r]:
-        if len(pts) > 1:
-            for k in range(len(pts) - 1):
-                cv2.line(canvas, pts[k], pts[k+1], (45, 75, 105), 1, cv2.LINE_AA)
+    # 3. 3D TRAJECTORY RIBBON (Fixed historical path drawn across stationary plane)
+    if len(trajectory) > 1:
+        scr_traj = []
+        for pt in trajectory:
+            u, v = project(np.array(pt, dtype=np.float64))
+            if u is not None and -50 <= u < w + 50 and -50 <= v < h + 50:
+                scr_traj.append((u, v))
+        if len(scr_traj) > 1:
+            for k in range(len(scr_traj) - 1):
+                cv2.line(canvas, scr_traj[k], scr_traj[k+1], (56, 189, 248), 2, cv2.LINE_AA)
+
+    # 4. MOVING CAR POINTER (Positioned at current_pos, turning with current_yaw)
+    car_x, car_y, car_z = current_pos[0], current_pos[1], current_pos[2]
+    car_pos_3d = np.array([car_x, car_y, car_z], dtype=np.float64)
+    u_c, v_c = project(car_pos_3d)
+
+    if u_c is not None and 0 <= u_c < w and 0 <= v_c < h:
+        car_yaw_rad = np.radians(current_yaw)
+        fwd_v = np.array([np.sin(car_yaw_rad), 0.0, np.cos(car_yaw_rad)])
+        side_v = np.array([np.cos(car_yaw_rad), 0.0, -np.sin(car_yaw_rad)])
+
+        # Vehicle Geometry scaled to view
+        v_len = 4.0 if max_z_seen < 120.0 else 6.0
+        v_wid = 2.2 if max_z_seen < 120.0 else 3.2
+        nose_pt = car_pos_3d + v_len * fwd_v
+        left_tail = car_pos_3d - (v_len * 0.8) * fwd_v - v_wid * side_v
+        center_tail = car_pos_3d - (v_len * 0.5) * fwd_v
+        right_tail = car_pos_3d - (v_len * 0.8) * fwd_v + v_wid * side_v
+
+        p_nose = project(nose_pt)
+        p_lt = project(left_tail)
+        p_ct = project(center_tail)
+        p_rt = project(right_tail)
+
+        if all(p[0] is not None for p in [p_nose, p_lt, p_ct, p_rt]):
+            car_poly = np.array([p_nose, p_lt, p_ct, p_rt], dtype=np.int32)
+            cv2.fillPoly(canvas, [car_poly], (0, 230, 118)) # Vivid neon emerald vehicle body
+            cv2.polylines(canvas, [car_poly], True, (255, 255, 255), 1, cv2.LINE_AA)
+
+        # Ground Target Footprint Rings on the Stationary Wireframe Plane
+        cv2.circle(canvas, (u_c, v_c), 8, (0, 255, 200), 1, cv2.LINE_AA)
+        cv2.circle(canvas, (u_c, v_c), 15, (0, 180, 255), 1, cv2.LINE_AA)
+
+    # Viewport HUD Badge Overlay
+    cv2.rectangle(canvas, (10, 10), (370, 75), (10, 15, 25), -1)
+    cv2.rectangle(canvas, (10, 10), (370, 75), (52, 211, 153), 1)
+    cv2.putText(canvas, "3D WORLD (STATIONARY WIREFRAME PLANE)", (20, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (52, 211, 153), 1, cv2.LINE_AA)
+    cv2.putText(canvas, f"Pose: X={car_x:.1f}m, Z={car_z:.1f}m | Yaw={current_yaw:+.1f} deg", (20, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (240, 240, 240), 1)
+    cv2.putText(canvas, f"Dynamic 3D Framing | Span: Z={max_z_seen:.0f}m", (20, 66), cv2.FONT_HERSHEY_SIMPLEX, 0.33, (56, 189, 248), 1)
+
+    return canvas
 
     # 2. ACCUMULATED 3D POINT CLOUD (Triangulated landmarks fixed in 3D world space)
     if accumulated_3d_pts is not None and len(accumulated_3d_pts) > 0:
@@ -646,13 +741,14 @@ if not st.session_state['streaming_active']:
         stream_placeholder.info("Video ready. Click '▶ START LIVE STREAM' to begin.")
 
     # Right Preview: Render EXACTLY what the user selected (Stationary 3D Wireframe vs Chase vs BEV)
+    is_hw = (video_choice != "Upload Custom Dashcam Video (.mp4)")
     if "Chase" in right_viewport_mode:
         sample_traj = [[-x*0.13, 0, x] for x in range(0, 140, 10)]
         preview_canvas = draw_3d_chase_canvas(sample_traj, sample_traj[-1], 12.0)
         twin_placeholder.image(cv2.cvtColor(preview_canvas, cv2.COLOR_BGR2RGB), caption="3D Chase Camera Follow (Standby)", use_container_width=True)
     elif "BEV" in right_viewport_mode or "Bird's-Eye" in right_viewport_mode:
         sample_traj = [[-x*0.13, 0, x] for x in range(0, 140, 10)]
-        preview_canvas = draw_bev_canvas(sample_traj, sample_traj[-1], 12.0)
+        preview_canvas = draw_bev_canvas(sample_traj, sample_traj[-1], 12.0, is_highway=is_hw)
         twin_placeholder.image(cv2.cvtColor(preview_canvas, cv2.COLOR_BGR2RGB), caption="Bird's-Eye View Ground Plane (Standby)", use_container_width=True)
     else: # Default: Stationary Wireframe Plane
         sample_traj = [[-x*0.13, 0, x] for x in range(0, 140, 10)]
@@ -670,18 +766,27 @@ if st.session_state['streaming_active']:
         cap_l = cv2.VideoCapture(video_left)
         cap_r = cv2.VideoCapture(video_right) if (is_stereo and video_right and os.path.exists(video_right)) else None
         
-        w = int(cap_l.get(cv2.CAP_PROP_FRAME_WIDTH))
-        h = int(cap_l.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        if w <= 0 or h <= 0: w, h = 1280, 720
+        orig_w = int(cap_l.get(cv2.CAP_PROP_FRAME_WIDTH))
+        orig_h = int(cap_l.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        if orig_w <= 0 or orig_h <= 0: orig_w, orig_h = 1280, 720
         
+        # Smart resolution normalization (normalize 4K UHD uploads to 1280p for 60 FPS real-time processing)
+        if orig_w > 1280:
+            scale_ratio = 1280.0 / orig_w
+            w = 1280
+            h = int(orig_h * scale_ratio)
+        else:
+            w, h = orig_w, orig_h
+            scale_ratio = 1.0
+            
         fx = fy = w * 0.95
         cx_p, cy_p = w / 2.0, h * 0.46
         
-        # Initialize Visual Odometry
+        # Initialize Visual Odometry with optimized blur threshold (15.0)
         if is_stereo and cap_r is not None:
             vo = StereoVisualOdometry(fx, fy, cx_p, cy_p, baseline=0.54)
         else:
-            vo = VisualOdometry(fx, fy, cx_p, cy_p, enable_blur_rejection=True, enable_parallax_gating=True, scale_fixed=0.85)
+            vo = VisualOdometry(fx, fy, cx_p, cy_p, enable_blur_rejection=True, blur_threshold=15.0, enable_parallax_gating=True, scale_fixed=0.85)
 
         trajectory_live = []
         yaws_live = []
@@ -707,6 +812,12 @@ if st.session_state['streaming_active']:
             if frame_limit > 0 and frame_idx > frame_limit:
                 break
                 
+            # Resize frame if resolution exceeds 1280p
+            if orig_w > 1280:
+                frame_l = cv2.resize(frame_l, (w, h))
+                if frame_r is not None:
+                    frame_r = cv2.resize(frame_r, (w, h))
+
             t_frame_start = time.perf_counter()
             
             # Process Frame
@@ -769,10 +880,11 @@ if st.session_state['streaming_active']:
             cv2.putText(annotated_frame, f"FRAME: {frame_idx} / {frame_limit}", (28, 84), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (56, 189, 248), 1, cv2.LINE_AA)
 
             # 2. Render Selected Right Viewport (Stationary 3D Wireframe vs Chase vs BEV)
+            is_hw = (video_choice != "Upload Custom Dashcam Video (.mp4)")
             if "Chase" in right_viewport_mode:
                 right_canvas = draw_3d_chase_canvas(trajectory_live, pos, euler[1], accumulated_3d_pts, w=640, h=440)
             elif "BEV" in right_viewport_mode or "Bird's-Eye" in right_viewport_mode:
-                right_canvas = draw_bev_canvas(trajectory_live, pos, euler[1], w=640, h=440)
+                right_canvas = draw_bev_canvas(trajectory_live, pos, euler[1], w=640, h=440, is_highway=is_hw)
             else: # Default: Stationary Wireframe Plane
                 right_canvas = draw_3d_stationary_canvas(trajectory_live, pos, euler[1], accumulated_3d_pts, w=640, h=440)
 

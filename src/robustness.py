@@ -9,7 +9,7 @@ class RobustnessEngine:
     3. Degeneracy Detection (Pure Rotation vs Translation Guard)
     4. Ground Plane Metric Scale Recovery (Road Plane RANSAC)
     """
-    def __init__(self, blur_threshold=60.0, min_parallax_px=2.5, 
+    def __init__(self, blur_threshold=15.0, min_parallax_px=1.2, 
                  rotation_degeneracy_ratio=0.85, camera_height_prior=1.65):
         self.blur_threshold = blur_threshold
         self.min_parallax_px = min_parallax_px

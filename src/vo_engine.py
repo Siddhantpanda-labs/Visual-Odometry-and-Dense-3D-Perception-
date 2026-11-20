@@ -17,6 +17,7 @@ class VisualOdometry:
     def __init__(self, fx=718.856, fy=718.856, cx=607.1928, cy=185.2157, 
                  min_features=1200, 
                  enable_blur_rejection=True,
+                 blur_threshold=15.0,
                  enable_parallax_gating=True,
                  enable_degeneracy_guard=True,
                  enable_ground_plane_scale=True,
@@ -42,8 +43,8 @@ class VisualOdometry:
         self.enable_ground_plane_scale = enable_ground_plane_scale
 
         self.robustness = RobustnessEngine(
-            blur_threshold=60.0,
-            min_parallax_px=2.0,
+            blur_threshold=blur_threshold,
+            min_parallax_px=1.2,
             rotation_degeneracy_ratio=0.85,
             camera_height_prior=1.65
         )
