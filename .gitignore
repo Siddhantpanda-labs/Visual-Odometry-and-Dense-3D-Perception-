@@ -25,3 +25,6 @@ outputs/real_presentation_demo.mp4
 .DS_Store
 Thumbs.db
 ~$*
+
+# Local archives
+*.zip
