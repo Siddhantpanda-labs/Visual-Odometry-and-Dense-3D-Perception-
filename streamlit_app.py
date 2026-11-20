@@ -503,14 +503,14 @@ with tab_report:
                     use_container_width=True
                 )
     
-    pptx_path = "docs/Visual_Odometry_Final_Presentation.pptx" if os.path.exists("docs/Visual_Odometry_Final_Presentation.pptx") else ("docs/Visual_Odometry_Project_Presentation.pptx" if os.path.exists("docs/Visual_Odometry_Project_Presentation.pptx") else "docs/Visual_Odometry_Presentation_v2.pptx")
+    pptx_path = "docs/Visual_Odometry_Research_Presentation.pptx" if os.path.exists("docs/Visual_Odometry_Research_Presentation.pptx") else ("docs/Visual_Odometry_Final_Presentation.pptx" if os.path.exists("docs/Visual_Odometry_Final_Presentation.pptx") else "docs/Visual_Odometry_Project_Presentation.pptx")
     with col_d2:
         if os.path.exists(pptx_path):
             with open(pptx_path, "rb") as f:
                 st.download_button(
                     label="📊 Presentation (.pptx)",
                     data=f.read(),
-                    file_name="Visual_Odometry_Project_Presentation.pptx",
+                    file_name="Visual_Odometry_Research_Presentation.pptx",
                     mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                     use_container_width=True
                 )
