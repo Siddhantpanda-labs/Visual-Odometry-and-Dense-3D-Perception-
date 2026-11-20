@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visual Odometry & 3D Reconstruction Defense Deck</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --card: #161b22;
+    --border: #30363d;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #f0883e;
+    --red: #f85149;
+    --text: #c9d1d9;
+    --text-bright: #f0f6fc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+  
+  .deck-container { flex: 1; position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+  .slide { position: absolute; width: 88%; max-width: 1100px; height: 82%; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 48px; opacity: 0; pointer-events: none; transform: translateY(20px); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); display: flex; flex-direction: column; box-shadow: 0 20px 40px rgba(0,0,0,0.6); overflow-y: auto; }
+  .slide.active { opacity: 1; pointer-events: auto; transform: translateY(0); }
+  
+  .slide-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; }
+  .slide-category { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); font-weight: 700; }
+  .slide-title { font-size: 28px; font-weight: 800; color: var(--text-bright); margin-top: 4px; }
+  .slide-count { font-size: 14px; color: #8b949e; }
+  
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; flex: 1; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; flex: 1; }
+  
+  .card { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
+  .card h3 { color: var(--text-bright); font-size: 18px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .card p, .card li { font-size: 14px; line-height: 1.6; color: #8b949e; }
+  ul { padding-left: 20px; }
+  
+  .metric-box { text-align: center; padding: 20px; background: rgba(56, 139, 253, 0.08); border: 1px solid rgba(56, 139, 253, 0.3); border-radius: 8px; }
+  .metric-val { font-size: 38px; font-weight: 900; color: var(--accent); margin: 6px 0; }
+  .metric-label { font-size: 13px; text-transform: uppercase; color: #8b949e; letter-spacing: 1px; }
+  
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: rgba(255,255,255,0.05); color: var(--text-bright); font-weight: 600; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .badge-green { color: var(--green); font-weight: 700; }
+  
+  .footer-nav { height: 60px; background: #090d13; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; padding: 0 32px; font-size: 13px; }
+  .nav-btn { background: var(--card); border: 1px solid var(--border); color: var(--text-bright); padding: 8px 18px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: background 0.2s; }
+  .nav-btn:hover { background: #21262d; border-color: var(--accent); }
+  .hotkey-hint { color: #8b949e; }
+  kbd { background: #21262d; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="deck-container">
+
+  <!-- Slide 1: Title -->
+  <div class="slide active">
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+      <div style="display: inline-block; padding: 6px 14px; background: rgba(56,139,253,0.15); border: 1px solid var(--accent); border-radius: 20px; color: var(--accent); font-weight: 700; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 20px;">
+        Final Defense & Technical Presentation
+      </div>
+      <h1 style="font-size: 44px; font-weight: 900; color: #fff; line-height: 1.2; max-width: 850px; margin-bottom: 18px;">
+        Visual Odometry & 3D Dense Reconstruction Framework
+      </h1>
+      <p style="font-size: 18px; color: #8b949e; max-width: 700px; margin-bottom: 36px;">
+        Modular Perception Front-End with Robustness Gating, Sliding-Window Bundle Adjustment, and Real-Time Dense Geometry
+      </p>
+      <div style="display: flex; gap: 32px; font-size: 14px; color: var(--text-bright);">
+        <div><strong>Pipeline:</strong> Mono & Stereo VO</div>
+        <div><strong>Optimization:</strong> Huber LM BA</div>
+        <div><strong>Evaluation:</strong> Sim(3) Umeyama</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 2: Problem Statement -->
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-category">Problem Statement</div>
+        <div class="slide-title">Why Does Classical Visual Odometry Fail?</div>
+      </div>
+      <div class="slide-count">02 / 08</div>
+    </div>
+    <div class="grid-3">
+      <div class="card">
+        <h3 style="color: var(--orange);">1. Scale Ambiguity</h3>
+        <p>Monocular 5-point epipolar geometry recovers translation $\mathbf{t}$ only up to an arbitrary scale factor $\lambda$. Accumulating scale errors over consecutive frames causes severe metric trajectory drift.</p>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--red);">2. Motion Degradation</h3>
+        <p>Sudden turns, potholes, and mechanical vibration produce motion blur. Spatial gradient loss breaks optical flow tracking, causing catastrophic RANSAC outlier explosion.</p>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--accent);">3. Epipolar Degeneracy</h3>
+        <p>When baseline translation approaches zero ($\mathbf{t} \approx 0$) or features lie on planar asphalt, the Essential Matrix $\mathbf{E} = [\mathbf{t}]_\times \mathbf{R}$ becomes ill-conditioned, hallucinating wild translations.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 3: Architecture & Gating -->
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-category">System Architecture</div>
+        <div class="slide-title">Gated Multi-Sensor Perception Pipeline</div>
+      </div>
+      <div class="slide-count">03 / 08</div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3>Three Measured Robustness Gates</h3>
+        <ul style="margin-top: 10px; display: flex; flex-direction: column; gap: 12px;">
+          <li><strong>Laplacian Blur Rejection:</strong> Evaluates $\text{Var}(\nabla^2 I)$. Frames with variance below 100 are rejected before matching.</li>
+          <li><strong>Parallax Keyframe Gating:</strong> If mean optical flow is $< 1.5\,\text{px}$, vehicle is stationary; holds pose to prevent random-walk drift.</li>
+          <li><strong>Homography Degeneracy Guard:</strong> If $N_H / N_E > 0.80$, pure rotation branch is activated, preventing scale explosion.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Dual-Sensor Odometry Engine</h3>
+        <ul style="margin-top: 10px; display: flex; flex-direction: column; gap: 12px;">
+          <li><strong>Monocular Mode:</strong> KLT corner tracking, 5-point RANSAC Essential matrix, cheirality depth test.</li>
+          <li><strong>Stereo Mode ($b=0.54\,\text{m}$):</strong> Sub-pixel stereo triangulation ($Z = f \cdot b / d$), EPnP 3D-to-2D pose solver.</li>
+          <li><strong>Sliding-Window BA:</strong> Optimizes last $W=5$ keyframe poses and landmarks with Huber loss Levenberg-Marquardt.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 4: Empirical Ablation -->
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-category">Empirical Results</div>
+        <div class="slide-title">Ablation Study (450-Frame Benchmark Course)</div>
+      </div>
+      <div class="slide-count">04 / 08</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Pipeline Architecture</th>
+          <th>Sensor</th>
+          <th>ATE RMSE (m)</th>
+          <th>RPE Drift (%)</th>
+          <th>Framerate</th>
+          <th>Key Finding</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Monocular Baseline</strong></td>
+          <td>Mono</td>
+          <td>26.31 m</td>
+          <td>16.07%</td>
+          <td>57.4 FPS</td>
+          <td>Subject to unobservable scale drift</td>
+        </tr>
+        <tr>
+          <td><strong>Mono + Robustness Gates</strong></td>
+          <td>Mono</td>
+          <td>23.93 m</td>
+          <td>14.61%</td>
+          <td><strong>66.3 FPS</strong></td>
+          <td>+15.5% faster by rejecting corrupt frames</td>
+        </tr>
+        <tr style="background: rgba(63, 185, 80, 0.08);">
+          <td><strong>Stereo VO (b=0.54m)</strong></td>
+          <td>Stereo</td>
+          <td><span class="badge-green">3.06 m</span></td>
+          <td><span class="badge-green">1.87%</span></td>
+          <td>60.9 FPS</td>
+          <td><strong>8.60× drift reduction</strong> via triangulation</td>
+        </tr>
+        <tr>
+          <td><strong>Stereo VO + Local BA (W=5)</strong></td>
+          <td>Stereo</td>
+          <td>13.99 m</td>
+          <td>8.54%</td>
+          <td>8.5 FPS</td>
+          <td>Smooths jitter; CPU bottleneck</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="display: flex; gap: 16px; margin-top: 24px;">
+      <div class="metric-box" style="flex: 1;">
+        <div class="metric-label">Stereo Drift Reduction</div>
+        <div class="metric-val">8.60×</div>
+        <div class="metric-label">16.07% → 1.87%</div>
+      </div>
+      <div class="metric-box" style="flex: 1;">
+        <div class="metric-label">Stereo Real-Time Speed</div>
+        <div class="metric-val">60.9</div>
+        <div class="metric-label">Frames Per Second</div>
+      </div>
+      <div class="metric-box" style="flex: 1;">
+        <div class="metric-label">Ablation Alignment</div>
+        <div class="metric-val">Sim(3)</div>
+        <div class="metric-label">Closed-form Umeyama</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 5: Real-World Testing & Failure Diagnosis -->
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-category">Validation & Failure Diagnosis</div>
+        <div class="slide-title">Real-World Highway Validation: Diagnosing & Fixing Unexpected Turns</div>
+      </div>
+      <div class="slide-count">05 / 08</div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="color: var(--red);">Root Cause of Sudden Turns</h3>
+        <ul style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
+          <li><strong>Low-Inlier SVD Degeneracy:</strong> At frame 67, inliers dropped to 0 due to shadows/passing cars. <code>recoverPose</code> returned an inverted 179.8° rotation matrix.</li>
+          <li><strong>Orientation Corruption:</strong> Unchecked rotation multiplied into $\mathbf{R}_w$, flipping the world reference frame 90° sideways.</li>
+          <li><strong>Sign Ambiguity:</strong> Epipolar geometry can flip the sign of $\mathbf{t}$, reversing forward motion.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--green);">Engineered Solution & Result</h3>
+        <ul style="margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
+          <li><strong>Minimum Inlier Gate:</strong> Rejects poses with $< 15$ inliers, holding pose state and replenishing corners.</li>
+          <li><strong>Kinematic Angular Guard:</strong> Rejects relative rotation $> 6.0^\circ$ ($> 150^\circ$/s is physically impossible in 40ms).</li>
+          <li><strong>Forward Motion Prior:</strong> Enforces $t_z > 0$ along camera optical axis.</li>
+          <li><strong>Result:</strong> Smooth, continuous <strong>1,118.0 m</strong> trajectory along the true highway curvature!</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 6: 3D Reconstruction -->
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-category">3D Reconstruction</div>
+        <div class="slide-title">Dense Depth & Metric Point Cloud Mapping</div>
+      </div>
+      <div class="slide-count">06 / 08</div>
+    </div>
+    <div class="grid-3">
+      <div class="card">
+        <h3>Filtered Stereo Depth</h3>
+        <p>StereoSGBM paired with speckle noise filter, sky horizon suppression, and bilateral edge preservation prevents rainbow noise artifacts on textureless asphalt.</p>
+      </div>
+      <div class="card">
+        <h3>Metric Point Cloud (.ply)</h3>
+        <p>Back-projects depth pixels into world space using inverse pinhole projection $\mathbf{P}_w = \mathbf{R}_w^T (\mathbf{K}^{-1} \hat{\mathbf{x}} \cdot Z - \mathbf{t}_w)$ for CAD and MeshLab inspection.</p>
+      </div>
+      <div class="card">
+        <h3>Interactive WebGL</h3>
+        <p>Standalone browser viewer with OrbitControls, ground grid, and 3D camera trajectory frustums. Zero software installation required.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 7: Viva Defense Talking Points -->
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-category">Viva Defense</div>
+        <div class="slide-title">Key Questions & Defensible Answers</div>
+      </div>
+      <div class="slide-count">07 / 08</div>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3 style="color: var(--accent);">Q1: Why not end-to-end Deep Learning VO?</h3>
+        <p><strong>Answer:</strong> Deep models (DROID-SLAM) require powerful GPUs, have non-deterministic inference latencies, and fail silently out-of-distribution. Classical geometric VO guarantees deterministic bounds and transparent failure diagnostics.</p>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--accent);">Q2: Why did Stereo drop drift by 8.6×?</h3>
+        <p><strong>Answer:</strong> Monocular VO cannot observe absolute scale from epipolar rays. Stereo triangulation provides an immutable metric baseline ($b=0.54\,\text{m}$), anchoring 3D point depth without scale drift.</p>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--accent);">Q3: Why Huber loss in Bundle Adjustment?</h3>
+        <p><strong>Answer:</strong> Standard $L_2$ squared loss quadratically amplifies outliers. Huber loss transitions linearly past $\delta = 1.5\,\text{px}$, preventing tracking outliers from distorting camera pose estimates.</p>
+      </div>
+      <div class="card">
+        <h3 style="color: var(--accent);">Q4: Why does standalone Stereo beat Stereo+BA?</h3>
+        <p><strong>Answer:</strong> On CPU, iterative Levenberg-Marquardt with large landmark matrices slows throughput to 8.5 FPS. In production, BA must run asynchronously on a background worker thread.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 8: Deliverables -->
+  <div class="slide">
+    <div class="slide-header">
+      <div>
+        <div class="slide-category">Deliverables</div>
+        <div class="slide-title">Complete Project Artifacts</div>
+      </div>
+      <div class="slide-count">08 / 08</div>
+    </div>
+    <div class="grid-3">
+      <div class="card">
+        <h3>Presentation Video</h3>
+        <p>Synchronized 4-pane 1280x720 video with optical flow, depth map, BEV trajectory, and 6-DoF telemetry HUD.</p>
+      </div>
+      <div class="card">
+        <h3>3D WebGL Viewer</h3>
+        <p>Interactive 3D orbit viewer for scene point clouds and camera paths.</p>
+      </div>
+      <div class="card">
+        <h3>IEEE Paper & Benchmark</h3>
+        <p>Conference-grade 2-column LaTeX paper and CSV ablation tables.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Navigation Bar -->
+<div class="footer-nav">
+  <div>
+    <button class="nav-btn" onclick="prevSlide()">&#8592; Previous</button>
+    <button class="nav-btn" onclick="nextSlide()" style="margin-left: 8px;">Next &#8594;</button>
+  </div>
+  <div class="hotkey-hint">Use <kbd>&#8592;</kbd> and <kbd>&#8594;</kbd> arrow keys to navigate slides</div>
+  <div style="font-weight: 700; color: var(--accent);">Visual Odometry & 3D Reconstruction Defense</div>
+</div>
+
+<script>
+  let currentSlide = 0;
+  const slides = document.querySelectorAll('.slide');
+
+  function showSlide(index) {
+    if (index < 0) index = 0;
+    if (index >= slides.length) index = slides.length - 1;
+    slides.forEach((s, i) => {
+      s.classList.toggle('active', i === index);
+    });
+    currentSlide = index;
+  }
+
+  function nextSlide() { showSlide(currentSlide + 1); }
+  function prevSlide() { showSlide(currentSlide - 1); }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'Space') nextSlide();
+    if (e.key === 'ArrowLeft') prevSlide();
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,26 @@
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Environments
+env/
+venv/
+ENV/
+.env
+
+# Scratch and temporary scripts
+scratch/
+
+# Large output binaries & point clouds (>50MB GitHub limits)
+outputs/*.ply
+data/real_driving.mp4
+outputs/real_presentation_demo.mp4
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
