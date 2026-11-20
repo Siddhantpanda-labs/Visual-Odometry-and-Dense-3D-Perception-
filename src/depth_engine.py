@@ -1,7 +1,11 @@
 import time
 import cv2
 import numpy as np
-import torch
+
+try:
+    import torch
+except ImportError:
+    torch = None
 
 class DepthEstimator:
     """
@@ -9,10 +13,13 @@ class DepthEstimator:
     Provides fast physics-based vanishing perspective depth with edge-preserving bilateral filtering.
     """
     def __init__(self, model_type='fast', device=None):
-        if device is None:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if torch is not None:
+            if device is None:
+                self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            else:
+                self.device = torch.device(device)
         else:
-            self.device = torch.device(device)
+            self.device = 'cpu'
             
         self.model_type = model_type
         self.model = None
@@ -20,7 +27,7 @@ class DepthEstimator:
         self.is_dnn = False
         self.last_infer_time = 0.0
 
-        if model_type in ['midas_small', 'dpt_beit']:
+        if model_type in ['midas_small', 'dpt_beit'] and torch is not None:
             self._try_init_dnn()
 
     def _try_init_dnn(self):
