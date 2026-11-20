@@ -489,38 +489,50 @@ with tab_video:
 with tab_report:
     st.markdown("#### 📑 Formal IEEE Conference Report & Perception Deliverables")
     
-    col_d1, col_d2, col_d3 = st.columns(3)
+    col_d1, col_d2, col_d3, col_d4 = st.columns(4)
     
     docx_path = "docs/IEEE_RESEARCH_REPORT_VISUAL_ODOMETRY_FINAL.docx" if os.path.exists("docs/IEEE_RESEARCH_REPORT_VISUAL_ODOMETRY_FINAL.docx") else "docs/IEEE_RESEARCH_REPORT_VISUAL_ODOMETRY.docx"
     with col_d1:
         if os.path.exists(docx_path):
             with open(docx_path, "rb") as f:
                 st.download_button(
-                    label="📄 Download IEEE Research Report (.docx)",
+                    label="📄 IEEE Report (.docx)",
                     data=f.read(),
                     file_name="IEEE_Visual_Odometry_Report_SidhantPanda.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     use_container_width=True
                 )
     
+    pptx_path = "docs/Visual_Odometry_Defense_Presentation.pptx"
     with col_d2:
+        if os.path.exists(pptx_path):
+            with open(pptx_path, "rb") as f:
+                st.download_button(
+                    label="📊 Defense Slides (.pptx)",
+                    data=f.read(),
+                    file_name="Visual_Odometry_Defense_Presentation.pptx",
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    use_container_width=True
+                )
+                
+    with col_d3:
         ply_path = "outputs/real_scene_pointcloud.ply" if os.path.exists("outputs/real_scene_pointcloud.ply") else "outputs/scene_pointcloud.ply"
         if os.path.exists(ply_path):
             with open(ply_path, "rb") as f:
                 st.download_button(
-                    label="☁️ Download 3D Point Cloud (.ply)",
+                    label="☁️ 3D Cloud (.ply)",
                     data=f.read(),
                     file_name="reconstructed_pointcloud.ply",
                     mime="application/octet-stream",
                     use_container_width=True
                 )
                 
-    with col_d3:
+    with col_d4:
         deck_path = "docs/defense_presentation.html"
         if os.path.exists(deck_path):
             with open(deck_path, "rb") as f:
                 st.download_button(
-                    label="🖥️ Download Defense Slide Deck (.html)",
+                    label="🖥️ Slide Deck (.html)",
                     data=f.read(),
                     file_name="defense_presentation.html",
                     mime="text/html",
