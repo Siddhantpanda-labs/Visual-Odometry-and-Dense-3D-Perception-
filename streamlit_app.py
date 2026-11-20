@@ -324,6 +324,145 @@ def draw_bev_canvas(trajectory, current_pos, current_yaw, w=640, h=440):
 
     return canvas
 
+def draw_3d_stationary_canvas(trajectory, current_pos, current_yaw, accumulated_3d_pts=None, w=640, h=440):
+    """
+    Renders 3D Reconstruction on a completely stationary ground wireframe plane.
+    The wireframe grid is fixed in world space, allowing the examiner to see the car pointer
+    physically move across grid squares, advance forward, and turn as heading yaw changes.
+    """
+    canvas = np.zeros((h, w, 3), dtype=np.uint8)
+    canvas[:] = (10, 14, 22) # Deep futuristic space/night backdrop
+
+    cam_pos = np.array([240.0, 520.0, -320.0])
+    look_target = np.array([-80.0, 0.0, 480.0])
+    up = np.array([0.0, 1.0, 0.0])
+
+    z_cam = look_target - cam_pos
+    z_norm = np.linalg.norm(z_cam)
+    z_cam = z_cam / (z_norm if z_norm > 1e-4 else 1.0)
+
+    x_cam = np.cross(up, z_cam)
+    x_norm = np.linalg.norm(x_cam)
+    x_cam = x_cam / (x_norm if x_norm > 1e-4 else 1.0)
+
+    y_cam = np.cross(z_cam, x_cam)
+    R_cam = np.vstack([x_cam, y_cam, z_cam])
+
+    fx = fy = 540.0
+    cx_scr = w * 0.46
+    cy_scr = h * 0.54
+
+    def project(P):
+        rel = P - cam_pos
+        c = R_cam @ rel
+        if c[2] <= 1.0: return None, None
+        u = int(fx * c[0] / c[2] + cx_scr)
+        v = int(-fy * c[1] / c[2] + cy_scr)
+        return u, v
+
+    # 1. FIXED STILL WIREFRAME GROUND PLANE (Anchored to world origin, completely stationary)
+    # Transverse grid lines (Z = 0, 50, 100, ..., 1150m)
+    for z_w in range(0, 1200, 50):
+        p1 = np.array([-200.0, 0.0, float(z_w)])
+        p2 = np.array([80.0, 0.0, float(z_w)])
+        u1, v1 = project(p1)
+        u2, v2 = project(p2)
+        if u1 is not None and u2 is not None:
+            alpha = max(0.18, 1.0 - z_w / 1250.0)
+            col = (int(42 * alpha), int(56 * alpha), int(76 * alpha))
+            cv2.line(canvas, (u1, v1), (u2, v2), col, 1)
+            # Distance labels along right edge of grid
+            if z_w in [0, 250, 500, 750, 1000]:
+                u_lbl, v_lbl = project(np.array([90.0, 0.0, float(z_w)]))
+                if u_lbl is not None and 0 <= u_lbl < w - 40 and 0 <= v_lbl < h:
+                    cv2.putText(canvas, f"{z_w}m", (u_lbl, v_lbl + 4), cv2.FONT_HERSHEY_SIMPLEX, 0.28, (70, 95, 120), 1)
+
+    # Longitudinal grid lines (X = -200, -160, ..., 80m)
+    for x_w in range(-200, 100, 40):
+        p1 = np.array([float(x_w), 0.0, 0.0])
+        p2 = np.array([float(x_w), 0.0, 1150.0])
+        u1, v1 = project(p1)
+        u2, v2 = project(p2)
+        if u1 is not None and u2 is not None:
+            cv2.line(canvas, (u1, v1), (u2, v2), (32, 45, 62), 1)
+
+    # Highway Reference Corridor (Curving AASHTO Ground Plane Boundaries)
+    ref_l, ref_r = [], []
+    for z_ref in np.linspace(0, 1100, 45):
+        x_ref = -135.0 * (z_ref / 1100.0) ** 1.8
+        ul, vl = project(np.array([x_ref - 14.0, 0.0, z_ref]))
+        ur, vr = project(np.array([x_ref + 14.0, 0.0, z_ref]))
+        if ul is not None and 0 <= ul < w and 0 <= vl < h: ref_l.append((ul, vl))
+        if ur is not None and 0 <= ur < w and 0 <= vr < h: ref_r.append((ur, vr))
+
+    for pts in [ref_l, ref_r]:
+        if len(pts) > 1:
+            for k in range(len(pts) - 1):
+                cv2.line(canvas, pts[k], pts[k+1], (45, 75, 105), 1, cv2.LINE_AA)
+
+    # 2. ACCUMULATED 3D POINT CLOUD (Triangulated landmarks fixed in 3D world space)
+    if accumulated_3d_pts is not None and len(accumulated_3d_pts) > 0:
+        for wpt in accumulated_3d_pts[-350:]:
+            u, v = project(np.array(wpt, dtype=np.float64))
+            if u is not None and 0 <= u < w and 0 <= v < h:
+                cv2.circle(canvas, (u, v), 2, (248, 189, 56), -1)
+
+    # 3. 3D TRAJECTORY RIBBON (Fixed historical path drawn across stationary plane)
+    if len(trajectory) > 1:
+        scr_traj = []
+        for pt in trajectory:
+            u, v = project(np.array(pt, dtype=np.float64))
+            if u is not None and -50 <= u < w + 50 and -50 <= v < h + 50:
+                scr_traj.append((u, v))
+        if len(scr_traj) > 1:
+            for k in range(len(scr_traj) - 1):
+                cv2.line(canvas, scr_traj[k], scr_traj[k+1], (56, 189, 248), 2, cv2.LINE_AA)
+
+    # 4. MOVING CAR POINTER (Positioned at current_pos, turning with current_yaw)
+    car_x, car_y, car_z = current_pos[0], current_pos[1], current_pos[2]
+    car_pos_3d = np.array([car_x, car_y, car_z], dtype=np.float64)
+    u_c, v_c = project(car_pos_3d)
+
+    if u_c is not None and 0 <= u_c < w and 0 <= v_c < h:
+        car_yaw_rad = np.radians(current_yaw)
+        fwd_v = np.array([np.sin(car_yaw_rad), 0.0, np.cos(car_yaw_rad)])
+        side_v = np.array([np.cos(car_yaw_rad), 0.0, -np.sin(car_yaw_rad)])
+
+        # 3D Vehicle Geometry (Length ~ 7m, Width ~ 3.5m)
+        nose_pt = car_pos_3d + 6.0 * fwd_v
+        left_tail = car_pos_3d - 5.0 * fwd_v - 3.2 * side_v
+        center_tail = car_pos_3d - 3.2 * fwd_v
+        right_tail = car_pos_3d - 5.0 * fwd_v + 3.2 * side_v
+
+        p_nose = project(nose_pt)
+        p_lt = project(left_tail)
+        p_ct = project(center_tail)
+        p_rt = project(right_tail)
+
+        if all(p[0] is not None for p in [p_nose, p_lt, p_ct, p_rt]):
+            car_poly = np.array([p_nose, p_lt, p_ct, p_rt], dtype=np.int32)
+            cv2.fillPoly(canvas, [car_poly], (0, 230, 118)) # Vivid neon emerald vehicle body
+            cv2.polylines(canvas, [car_poly], True, (255, 255, 255), 1, cv2.LINE_AA)
+            # Headlights beam projection
+            hl_l = project(car_pos_3d + 16.0 * fwd_v - 2.0 * side_v)
+            hl_r = project(car_pos_3d + 16.0 * fwd_v + 2.0 * side_v)
+            if hl_l[0] is not None and hl_r[0] is not None:
+                cv2.line(canvas, p_nose, hl_l, (255, 255, 180), 1, cv2.LINE_AA)
+                cv2.line(canvas, p_nose, hl_r, (255, 255, 180), 1, cv2.LINE_AA)
+
+        # Ground Target Footprint Rings on the Stationary Wireframe Plane
+        cv2.circle(canvas, (u_c, v_c), 8, (0, 255, 200), 1, cv2.LINE_AA)
+        cv2.circle(canvas, (u_c, v_c), 15, (0, 180, 255), 1, cv2.LINE_AA)
+
+    # Viewport HUD Badge Overlay
+    cv2.rectangle(canvas, (10, 10), (370, 75), (10, 15, 25), -1)
+    cv2.rectangle(canvas, (10, 10), (370, 75), (52, 211, 153), 1)
+    cv2.putText(canvas, "3D WORLD (STATIONARY WIREFRAME PLANE)", (20, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (52, 211, 153), 1, cv2.LINE_AA)
+    cv2.putText(canvas, f"Pose: X={car_x:.1f}m, Z={car_z:.1f}m | Yaw={current_yaw:+.1f} deg", (20, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (240, 240, 240), 1)
+    cv2.putText(canvas, "Stationary Grid: Car Pointer Moving & Turning in 3D Space", (20, 66), cv2.FONT_HERSHEY_SIMPLEX, 0.33, (56, 189, 248), 1)
+
+    return canvas
+
 def draw_3d_chase_canvas(trajectory, current_pos, current_yaw, accumulated_3d_pts=None, w=640, h=440):
     canvas = np.zeros((h, w, 3), dtype=np.uint8)
     canvas[:] = (10, 14, 22) # Deep night sky
@@ -361,15 +500,17 @@ def draw_3d_chase_canvas(trajectory, current_pos, current_yaw, accumulated_3d_pt
         v = int(-fy * c[1] / c[2] + cy_scr)
         return u, v, c[2]
 
-    # Ground Plane Perspective Grid Lines in Chase View
-    for offset_z in np.linspace(-15, 140, 16):
-        pt_l = car_pos + offset_z * fwd - 24.0 * x_cam
-        pt_r = car_pos + offset_z * fwd + 24.0 * x_cam
+    # Ground Plane Perspective Grid Lines in Chase View (World Fixed Coordinates)
+    base_z = int(car_pos[2] // 15) * 15
+    for zw in range(base_z - 30, base_z + 150, 15):
+        pt_l = np.array([car_pos[0] - 25.0, 0.0, float(zw)])
+        pt_r = np.array([car_pos[0] + 25.0, 0.0, float(zw)])
         ul, vl, zl = project_point(pt_l)
         ur, vr, zr = project_point(pt_r)
         if ul is not None and ur is not None:
-            alpha = max(0.1, min(1.0, 1.0 - offset_z / 140.0))
-            col = (int(30 * alpha), int(42 * alpha), int(58 * alpha))
+            dist_ahead = float(zw) - car_pos[2]
+            alpha = max(0.1, min(1.0, 1.0 - dist_ahead / 150.0))
+            col = (int(30 * alpha), int(45 * alpha), int(65 * alpha))
             cv2.line(canvas, (ul, vl), (ur, vr), col, 1)
 
     # Road Lane Lines (Highway Corridor)
@@ -457,7 +598,8 @@ with col_right_view:
     right_viewport_mode = st.selectbox(
         "🎛️ Right Viewport Display Mode",
         [
-            "🎮 Live 3D Reconstruction (Camera Following)",
+            "🎮 Live 3D Reconstruction (Stationary Wireframe Plane)",
+            "🏎️ Live 3D Chase Camera (Vehicle Follow View)",
             "🗺️ Live Bird's-Eye View (BEV) Trajectory"
         ],
         index=0
@@ -503,15 +645,19 @@ if not st.session_state['streaming_active']:
     else:
         stream_placeholder.info("Video ready. Click '▶ START LIVE STREAM' to begin.")
 
-    # Right Preview: Render EXACTLY what the user selected (3D Reconstruction vs BEV)
-    if "3D Reconstruction" in right_viewport_mode:
-        sample_traj = [[-x*0.15, 0, x] for x in range(0, 120, 10)]
+    # Right Preview: Render EXACTLY what the user selected (Stationary 3D Wireframe vs Chase vs BEV)
+    if "Chase" in right_viewport_mode:
+        sample_traj = [[-x*0.13, 0, x] for x in range(0, 140, 10)]
         preview_canvas = draw_3d_chase_canvas(sample_traj, sample_traj[-1], 12.0)
-        twin_placeholder.image(cv2.cvtColor(preview_canvas, cv2.COLOR_BGR2RGB), caption="3D Reconstruction Scene & Chase Camera Follow (Standby)", use_container_width=True)
-    else:
-        sample_traj = [[-x*0.15, 0, x] for x in range(0, 120, 10)]
+        twin_placeholder.image(cv2.cvtColor(preview_canvas, cv2.COLOR_BGR2RGB), caption="3D Chase Camera Follow (Standby)", use_container_width=True)
+    elif "BEV" in right_viewport_mode or "Bird's-Eye" in right_viewport_mode:
+        sample_traj = [[-x*0.13, 0, x] for x in range(0, 140, 10)]
         preview_canvas = draw_bev_canvas(sample_traj, sample_traj[-1], 12.0)
         twin_placeholder.image(cv2.cvtColor(preview_canvas, cv2.COLOR_BGR2RGB), caption="Bird's-Eye View Ground Plane (Standby)", use_container_width=True)
+    else: # Default: Stationary Wireframe Plane
+        sample_traj = [[-x*0.13, 0, x] for x in range(0, 140, 10)]
+        preview_canvas = draw_3d_stationary_canvas(sample_traj, sample_traj[-1], 12.0)
+        twin_placeholder.image(cv2.cvtColor(preview_canvas, cv2.COLOR_BGR2RGB), caption="3D Reconstruction (Stationary Wireframe Plane - Standby)", use_container_width=True)
 
 # =============================================================================
 # ACTIVE STREAMING EXECUTION LOOP
@@ -622,11 +768,13 @@ if st.session_state['streaming_active']:
             cv2.putText(annotated_frame, f"KLT INLIERS: {inliers} / 1500", (28, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (52, 211, 153), 1, cv2.LINE_AA)
             cv2.putText(annotated_frame, f"FRAME: {frame_idx} / {frame_limit}", (28, 84), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (56, 189, 248), 1, cv2.LINE_AA)
 
-            # 2. Render Selected Right Viewport (3D Chase Camera vs BEV)
-            if "3D Reconstruction" in right_viewport_mode:
+            # 2. Render Selected Right Viewport (Stationary 3D Wireframe vs Chase vs BEV)
+            if "Chase" in right_viewport_mode:
                 right_canvas = draw_3d_chase_canvas(trajectory_live, pos, euler[1], accumulated_3d_pts, w=640, h=440)
-            else:
+            elif "BEV" in right_viewport_mode or "Bird's-Eye" in right_viewport_mode:
                 right_canvas = draw_bev_canvas(trajectory_live, pos, euler[1], w=640, h=440)
+            else: # Default: Stationary Wireframe Plane
+                right_canvas = draw_3d_stationary_canvas(trajectory_live, pos, euler[1], accumulated_3d_pts, w=640, h=440)
 
             # Stream Viewports to Web UI
             stream_placeholder.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB), use_container_width=True)
