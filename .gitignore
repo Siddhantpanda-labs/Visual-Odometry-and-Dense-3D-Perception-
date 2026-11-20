@@ -16,7 +16,6 @@ scratch/
 
 # Large output binaries & point clouds (>50MB GitHub limits)
 outputs/*.ply
-data/real_driving.mp4
 outputs/real_presentation_demo.mp4
 
 # IDE & OS

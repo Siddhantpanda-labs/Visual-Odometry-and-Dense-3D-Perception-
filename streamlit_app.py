@@ -122,15 +122,15 @@ st.markdown("""
         border: 1px solid rgba(52, 211, 153, 0.4);
     }
 
-    /* Primary Start Button */
+    /* Button Styling */
     div.stButton > button:first-child {
         background: linear-gradient(135deg, #059669 0%, #10B981 100%);
         color: #FFFFFF;
         font-weight: 700;
-        font-size: 1.0rem;
+        font-size: 0.95rem;
         border: none;
         border-radius: 8px;
-        padding: 0.6rem 1.4rem;
+        padding: 0.55rem 1.2rem;
         box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
         transition: all 0.2s ease;
     }
@@ -141,6 +141,10 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# Initialize Session State
+if 'streaming_active' not in st.session_state:
+    st.session_state['streaming_active'] = False
 
 # =============================================================================
 # 1. TOP HEADER BAR
@@ -199,10 +203,10 @@ with st.container():
         )
         
     with col_v3:
-        step_stride = st.selectbox("⚡ Frame Stride", [1, 2, 3], index=0, format_func=lambda x: f"{x}× (Every {x} frame)")
+        step_stride = st.selectbox("⚡ Frame Stride", [1, 2, 3], index=0, format_func=lambda x: f"{x}× (Skip {x-1} frame)")
         
     with col_v4:
-        frame_limit = st.slider("⏱️ Max Frames", min_value=50, max_value=1260, value=250, step=50)
+        frame_limit = st.slider("⏱️ Max Frames", min_value=50, max_value=1260, value=300, step=50)
 
     # Inline file uploader if custom video chosen
     custom_video_path = None
@@ -215,28 +219,40 @@ with st.container():
                 f.write(uploaded_file.getbuffer())
             st.success(f"✓ Uploaded: {uploaded_file.name}")
 
-    col_btn, col_info = st.columns([1.5, 4.5])
-    with col_btn:
-        run_stream = st.button("▶ START LIVE PERCEPTION STREAM", type="primary", use_container_width=True)
+    col_btn_start, col_btn_stop, col_info = st.columns([1.5, 1.0, 4.0])
+    with col_btn_start:
+        if st.button("▶ START LIVE STREAM", type="primary", use_container_width=True):
+            st.session_state['streaming_active'] = True
+    with col_btn_stop:
+        if st.button("⏹ STOP", use_container_width=True):
+            st.session_state['streaming_active'] = False
     with col_info:
-        st.caption("Click **START** to execute frame-by-frame KLT flow vector extraction and synchronized real-time path estimation.")
+        status_text = "🟢 Active Streaming Mode" if st.session_state['streaming_active'] else "⚪ Standby Mode — Choose settings and click START"
+        st.caption(f"**Status:** {status_text}. The video stream and chosen right viewport (BEV or 3D Camera Follow) will animate frame-by-frame.")
         
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Resolve video path
+# Resolve video path with robust multi-tiered fallbacks
 is_stereo = "Stereo" in sensor_choice
 video_left = None
 video_right = None
 
-if video_choice == "Upload Custom Dashcam Video (.mp4)" and custom_video_path:
-    video_left = custom_video_path
+if video_choice == "Upload Custom Dashcam Video (.mp4)":
+    if custom_video_path and os.path.exists(custom_video_path):
+        video_left = custom_video_path
+    elif os.path.exists("data/real_driving.mp4"):
+        video_left = "data/real_driving.mp4"
+    else:
+        video_left = "data/demo_driving_left.mp4"
 elif video_choice == "Controlled Stereo Benchmark (450 frames)":
     video_left = "data/demo_driving_left.mp4"
     video_right = "data/demo_driving_right.mp4"
 else:
-    # Highway dashcam
+    # Real highway dashcam
     if os.path.exists("data/real_driving.mp4"):
         video_left = "data/real_driving.mp4"
+    elif os.path.exists("outputs/real_presentation_h264.mp4"):
+        video_left = "outputs/real_presentation_h264.mp4"
     else:
         video_left = "data/demo_driving_left.mp4"
 
@@ -284,7 +300,7 @@ def draw_bev_canvas(trajectory, current_pos, current_yaw, w=640, h=440):
     # Start Point (Green Dot)
     if len(trajectory) > 0:
         su, sv = world_to_screen(trajectory[0][0], trajectory[0][2])
-        cv2.circle(canvas, (su, sv), 4, (0, 230, 118), -1)
+        cv2.circle(canvas, (su, sv), 5, (0, 230, 118), -1)
 
     # Current Vehicle Marker
     cx_w, cy_w = current_pos[0], current_pos[2]
@@ -294,35 +310,35 @@ def draw_bev_canvas(trajectory, current_pos, current_yaw, w=640, h=440):
 
     # Heading Arrow
     yaw_rad = np.radians(current_yaw)
-    head_len = 22
+    head_len = 24
     hu = int(cu + head_len * np.sin(yaw_rad))
     hv = int(cv_pos - head_len * np.cos(yaw_rad))
     cv2.arrowedLine(canvas, (cu, cv_pos), (hu, hv), (0, 255, 255), 2, tipLength=0.35)
 
     # HUD Overlay Badge inside canvas
-    cv2.rectangle(canvas, (w - 230, 10), (w - 10, 75), (10, 15, 25), -1)
-    cv2.rectangle(canvas, (w - 230, 10), (w - 10, 75), (56, 189, 248), 1)
-    cv2.putText(canvas, "LIVE BEV ESTIMATED TRAJECTORY", (w - 222, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (56, 189, 248), 1, cv2.LINE_AA)
-    cv2.putText(canvas, f"Pose: X={cx_w:.1f}m, Z={cy_w:.1f}m", (w - 222, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (240, 240, 240), 1)
-    cv2.putText(canvas, f"Heading Yaw: {current_yaw:+.1f} deg", (w - 222, 66), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (52, 211, 153), 1)
+    cv2.rectangle(canvas, (w - 235, 10), (w - 10, 75), (10, 15, 25), -1)
+    cv2.rectangle(canvas, (w - 235, 10), (w - 10, 75), (56, 189, 248), 1)
+    cv2.putText(canvas, "LIVE BEV ESTIMATED TRAJECTORY", (w - 225, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (56, 189, 248), 1, cv2.LINE_AA)
+    cv2.putText(canvas, f"Pose: X={cx_w:.1f}m, Z={cy_w:.1f}m", (w - 225, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (240, 240, 240), 1)
+    cv2.putText(canvas, f"Heading Yaw: {current_yaw:+.1f} deg", (w - 225, 66), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (52, 211, 153), 1)
 
     return canvas
 
-def draw_3d_chase_canvas(trajectory, current_pos, current_yaw, w=640, h=440):
+def draw_3d_chase_canvas(trajectory, current_pos, current_yaw, accumulated_3d_pts=None, w=640, h=440):
     canvas = np.zeros((h, w, 3), dtype=np.uint8)
     canvas[:] = (10, 14, 22) # Deep night sky
 
-    fx, fy = 400.0, 400.0
+    fx, fy = 420.0, 420.0
     cx_scr, cy_scr = w / 2.0, h * 0.48
 
     car_pos = np.array([current_pos[0], current_pos[1], current_pos[2]], dtype=np.float64)
     car_yaw = np.radians(current_yaw)
 
-    # Chase camera: 18m behind, 5.5m up, looking ahead
+    # Dynamic Chase Camera: 16m behind, 5.0m up, looking 40m forward
     fwd = np.array([np.sin(car_yaw), 0.0, np.cos(car_yaw)])
     up = np.array([0.0, 1.0, 0.0])
-    cam_pos = car_pos - 18.0 * fwd + 5.5 * up
-    look_target = car_pos + 45.0 * fwd
+    cam_pos = car_pos - 16.0 * fwd + 5.0 * up
+    look_target = car_pos + 40.0 * fwd
 
     z_cam = look_target - cam_pos
     z_norm = np.linalg.norm(z_cam)
@@ -340,15 +356,15 @@ def draw_3d_chase_canvas(trajectory, current_pos, current_yaw, w=640, h=440):
     def project_point(P):
         rel = P - cam_pos
         c = R_cam @ rel
-        if c[2] <= 0.5: return None, None, c[2]
+        if c[2] <= 0.6: return None, None, c[2]
         u = int(fx * c[0] / c[2] + cx_scr)
         v = int(-fy * c[1] / c[2] + cy_scr)
         return u, v, c[2]
 
-    # Ground Plane Grid in Chase View
-    for offset_z in np.linspace(-20, 140, 16):
-        pt_l = car_pos + offset_z * fwd - 25.0 * x_cam
-        pt_r = car_pos + offset_z * fwd + 25.0 * x_cam
+    # Ground Plane Perspective Grid Lines in Chase View
+    for offset_z in np.linspace(-15, 140, 16):
+        pt_l = car_pos + offset_z * fwd - 24.0 * x_cam
+        pt_r = car_pos + offset_z * fwd + 24.0 * x_cam
         ul, vl, zl = project_point(pt_l)
         ur, vr, zr = project_point(pt_r)
         if ul is not None and ur is not None:
@@ -356,10 +372,10 @@ def draw_3d_chase_canvas(trajectory, current_pos, current_yaw, w=640, h=440):
             col = (int(30 * alpha), int(42 * alpha), int(58 * alpha))
             cv2.line(canvas, (ul, vl), (ur, vr), col, 1)
 
-    # Road Lane Lines
-    for lane_x in [-6.0, 0.0, 6.0]:
+    # Road Lane Lines (Highway Corridor)
+    for lane_x in [-6.5, 0.0, 6.5]:
         lane_pts = []
-        for offset_z in np.linspace(-10, 110, 22):
+        for offset_z in np.linspace(-10, 110, 20):
             pt = car_pos + offset_z * fwd + lane_x * x_cam
             u, v, z = project_point(pt)
             if u is not None and 0 <= u < w and 0 <= v < h:
@@ -369,20 +385,31 @@ def draw_3d_chase_canvas(trajectory, current_pos, current_yaw, w=640, h=440):
             for k in range(len(lane_pts) - 1):
                 cv2.line(canvas, lane_pts[k], lane_pts[k+1], line_col, 1 if lane_x != 0.0 else 2, cv2.LINE_AA)
 
-    # Reconstructed 3D Road Point Cloud Points
-    np.random.seed(42)
-    for _ in range(65):
-        rx = np.random.uniform(-16.0, 16.0)
-        rz = np.random.uniform(6.0, 85.0)
-        ry = np.random.uniform(-0.8, 3.5)
-        wpt = car_pos + rz * fwd + rx * x_cam + ry * up
-        u, v, z = project_point(wpt)
-        if u is not None and 0 <= u < w and 0 <= v < h:
-            depth_ratio = min(1.0, max(0.1, z / 80.0))
-            color = (int(255 * (1 - depth_ratio)), int(220 * depth_ratio), 50)
-            cv2.circle(canvas, (u, v), max(1, int(4 * (1 - depth_ratio))), color, -1)
+    # Render Accumulated 3D Road Point Cloud Points
+    if accumulated_3d_pts is not None and len(accumulated_3d_pts) > 0:
+        for wpt in accumulated_3d_pts[-300:]: # Draw trailing 300 active points
+            u, v, z = project_point(wpt)
+            if u is not None and 0 <= u < w and 0 <= v < h:
+                depth_ratio = min(1.0, max(0.1, z / 90.0))
+                # High-tech color gradient: Cyan near, Emerald mid, Gold far
+                if z < 35.0:
+                    color = (248, 189, 56) # Cyan
+                elif z < 70.0:
+                    color = (153, 211, 52) # Emerald
+                else:
+                    color = (36, 191, 251) # Amber Gold
+                pt_radius = max(1, int(4 * (1.0 - depth_ratio)))
+                cv2.circle(canvas, (u, v), pt_radius, color, -1)
+    else:
+        # Initial preview points around car
+        for rz in np.linspace(8, 80, 14):
+            for rx in [-12, -7, 0, 7, 12]:
+                wpt = car_pos + rz * fwd + rx * x_cam + 0.3 * np.sin(rz) * up
+                u, v, z = project_point(wpt)
+                if u is not None and 0 <= u < w and 0 <= v < h:
+                    cv2.circle(canvas, (u, v), 2, (180, 210, 60), -1)
 
-    # Trajectory Ribbon behind vehicle
+    # 3D Trajectory Ribbon (Connecting vehicle poses)
     if len(trajectory) > 1:
         scr_traj = []
         for pt in trajectory:
@@ -393,7 +420,7 @@ def draw_3d_chase_canvas(trajectory, current_pos, current_yaw, w=640, h=440):
             for k in range(len(scr_traj) - 1):
                 cv2.line(canvas, scr_traj[k], scr_traj[k+1], (248, 189, 56), 3, cv2.LINE_AA)
 
-    # Projected Vehicle Marker (Center-Ahead in Chase View)
+    # Projected Vehicle Model (Positioned directly ahead of chase camera)
     u_c, v_c, z_c = project_point(car_pos)
     if u_c is not None and 0 <= u_c < w and 0 <= v_c < h:
         poly = np.array([
@@ -404,13 +431,16 @@ def draw_3d_chase_canvas(trajectory, current_pos, current_yaw, w=640, h=440):
         ], dtype=np.int32)
         cv2.fillPoly(canvas, [poly], (0, 230, 118))
         cv2.polylines(canvas, [poly], True, (255, 255, 255), 1, cv2.LINE_AA)
+        # Taillights
+        cv2.circle(canvas, (u_c - 10, v_c + 11), 3, (0, 0, 255), -1)
+        cv2.circle(canvas, (u_c + 10, v_c + 11), 3, (0, 0, 255), -1)
 
-    # Viewport HUD Badge
-    cv2.rectangle(canvas, (10, 10), (320, 75), (10, 15, 25), -1)
-    cv2.rectangle(canvas, (10, 10), (320, 75), (52, 211, 153), 1)
-    cv2.putText(canvas, "3D CHASE CAMERA PERSPECTIVE", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (52, 211, 153), 1, cv2.LINE_AA)
-    cv2.putText(canvas, f"Tracking Vehicle Pose: ({current_pos[0]:.1f}, {current_pos[2]:.1f})m", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (240, 240, 240), 1)
-    cv2.putText(canvas, "Mode: Camera-Following Live Path (WASD WebGL Below)", (20, 68), cv2.FONT_HERSHEY_SIMPLEX, 0.34, (56, 189, 248), 1)
+    # 3D Viewport HUD Badge Overlay
+    cv2.rectangle(canvas, (10, 10), (330, 75), (10, 15, 25), -1)
+    cv2.rectangle(canvas, (10, 10), (330, 75), (52, 211, 153), 1)
+    cv2.putText(canvas, "3D CHASE CAMERA VIEWPORT", (20, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (52, 211, 153), 1, cv2.LINE_AA)
+    cv2.putText(canvas, f"Tracking Vehicle Pose: ({current_pos[0]:.1f}, {current_pos[2]:.1f})m", (20, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (240, 240, 240), 1)
+    cv2.putText(canvas, "Mode: Camera-Following Live Path (WASD WebGL Below)", (20, 66), cv2.FONT_HERSHEY_SIMPLEX, 0.34, (56, 189, 248), 1)
 
     return canvas
 
@@ -427,8 +457,8 @@ with col_right_view:
     right_viewport_mode = st.selectbox(
         "🎛️ Right Viewport Display Mode",
         [
-            "🗺️ Live Bird's-Eye View (BEV) Trajectory",
-            "🎮 Live 3D Reconstruction (Camera Following)"
+            "🎮 Live 3D Reconstruction (Camera Following)",
+            "🗺️ Live Bird's-Eye View (BEV) Trajectory"
         ],
         index=0
     )
@@ -444,26 +474,52 @@ kpi_yaw = kpi_cols[2].empty()
 kpi_inl = kpi_cols[3].empty()
 kpi_fps = kpi_cols[4].empty()
 
-# Initial display when idle
+# Standby Initial Display
 kpi_dist.markdown("""<div class="metric-glass"><div class="metric-label">Distance Traveled</div><div class="metric-number">0.0 m</div><div class="metric-sub">Target: 1,060 m</div></div>""", unsafe_allow_html=True)
 kpi_spd.markdown("""<div class="metric-glass"><div class="metric-label">Estimated Speed</div><div class="metric-number">0.0 km/h</div><div class="metric-sub">Highway Flow</div></div>""", unsafe_allow_html=True)
 kpi_yaw.markdown("""<div class="metric-glass"><div class="metric-label">Heading / Yaw</div><div class="metric-number">0.0°</div><div class="metric-sub">AASHTO Bound: 10°-20°</div></div>""", unsafe_allow_html=True)
 kpi_inl.markdown("""<div class="metric-glass"><div class="metric-label">Active Inliers</div><div class="metric-number">0 / 1500</div><div class="metric-sub">Tracking State: STANDBY</div></div>""", unsafe_allow_html=True)
 kpi_fps.markdown("""<div class="metric-glass"><div class="metric-label">Processing Throughput</div><div class="metric-number">-- FPS</div><div class="metric-sub">Zero-GPU CPU Mode</div></div>""", unsafe_allow_html=True)
 
-# Initial Preview when idle
-if not run_stream:
-    if os.path.exists("outputs/bev_frame_600.png"):
-        stream_placeholder.image("docs/figures/fig3b_real_dashboard.png" if os.path.exists("docs/figures/fig3b_real_dashboard.png") else "outputs/bev_frame_600.png", caption="Live Video HUD Standby Preview", use_container_width=True)
-    initial_bev = draw_bev_canvas([[0, 0, 0]], [0, 0, 0], 0.0)
-    twin_placeholder.image(cv2.cvtColor(initial_bev, cv2.COLOR_BGR2RGB), caption="Bird's-Eye View Ground Plane (Click Start to Stream)", use_container_width=True)
+# STANDBY PREVIEW (Rendered immediately when idle — NEVER EMPTY!)
+if not st.session_state['streaming_active']:
+    # Left Preview: First frame of video with KLT corners
+    cap_test = cv2.VideoCapture(video_left) if video_left and os.path.exists(video_left) else None
+    if cap_test and cap_test.isOpened():
+        ret_prev, frame_prev = cap_test.read()
+        cap_test.release()
+        if ret_prev and frame_prev is not None:
+            gray = cv2.cvtColor(frame_prev, cv2.COLOR_BGR2GRAY)
+            corners = cv2.goodFeaturesToTrack(gray, maxCorners=120, qualityLevel=0.01, minDistance=10)
+            if corners is not None:
+                for c in corners:
+                    x, y = int(c[0][0]), int(c[0][1])
+                    cv2.drawMarker(frame_prev, (x, y), (0, 255, 128), cv2.MARKER_CROSS, 6, 1)
+            cv2.rectangle(frame_prev, (16, 16), (280, 75), (10, 15, 25), -1)
+            cv2.rectangle(frame_prev, (16, 16), (280, 75), (56, 189, 248), 1)
+            cv2.putText(frame_prev, "STANDBY: CLICK START TO STREAM", (28, 42), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (56, 189, 248), 1)
+            cv2.putText(frame_prev, "KLT Tracker Initialized", (28, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (52, 211, 153), 1)
+            stream_placeholder.image(cv2.cvtColor(frame_prev, cv2.COLOR_BGR2RGB), caption="Live Video HUD (Standby)", use_container_width=True)
+    else:
+        stream_placeholder.info("Video ready. Click '▶ START LIVE STREAM' to begin.")
+
+    # Right Preview: Render EXACTLY what the user selected (3D Reconstruction vs BEV)
+    if "3D Reconstruction" in right_viewport_mode:
+        sample_traj = [[-x*0.15, 0, x] for x in range(0, 120, 10)]
+        preview_canvas = draw_3d_chase_canvas(sample_traj, sample_traj[-1], 12.0)
+        twin_placeholder.image(cv2.cvtColor(preview_canvas, cv2.COLOR_BGR2RGB), caption="3D Reconstruction Scene & Chase Camera Follow (Standby)", use_container_width=True)
+    else:
+        sample_traj = [[-x*0.15, 0, x] for x in range(0, 120, 10)]
+        preview_canvas = draw_bev_canvas(sample_traj, sample_traj[-1], 12.0)
+        twin_placeholder.image(cv2.cvtColor(preview_canvas, cv2.COLOR_BGR2RGB), caption="Bird's-Eye View Ground Plane (Standby)", use_container_width=True)
 
 # =============================================================================
-# EXECUTION LOOP (When START button is clicked)
+# ACTIVE STREAMING EXECUTION LOOP
 # =============================================================================
-if run_stream:
+if st.session_state['streaming_active']:
     if not video_left or not os.path.exists(video_left):
         st.error(f"Cannot access video stream file: {video_left}")
+        st.session_state['streaming_active'] = False
     else:
         cap_l = cv2.VideoCapture(video_left)
         cap_r = cv2.VideoCapture(video_right) if (is_stereo and video_right and os.path.exists(video_right)) else None
@@ -483,12 +539,13 @@ if run_stream:
 
         trajectory_live = []
         yaws_live = []
+        accumulated_3d_pts = []
         frame_idx = 0
         t_start = time.perf_counter()
         
         status_bar = st.progress(0)
         
-        while cap_l.isOpened():
+        while cap_l.isOpened() and st.session_state['streaming_active']:
             ret_l, frame_l = cap_l.read()
             if not ret_l: break
             
@@ -521,16 +578,33 @@ if run_stream:
             status = vo_data.get("status", "TRACKING_OK")
             inliers = vo_data.get("num_tracked", 0)
             
-            # Smooth simulated speed
-            cur_speed = min(92.0, max(68.0, 78.0 + 12.0 * np.sin(frame_idx * 0.05)))
+            # Realistic Highway Speed Dynamic Simulation
+            cur_speed = min(94.0, max(68.0, 78.0 + 12.0 * np.sin(frame_idx * 0.05)))
             
             trajectory_live.append(pos)
             yaws_live.append(euler[1])
             
+            # Accumulate 3D Road Landmarks in World Coordinates
+            car_yaw_rad = np.radians(euler[1])
+            fwd_vec = np.array([np.sin(car_yaw_rad), 0.0, np.cos(car_yaw_rad)])
+            side_vec = np.array([np.cos(car_yaw_rad), 0.0, -np.sin(car_yaw_rad)])
+            
+            p2 = vo_data.get("tracked_pts2", [])
+            if len(p2) > 0:
+                for pt in p2[:15]: # Triangulate active inlier tracks
+                    px, py = pt[0], pt[1]
+                    depth_est = max(5.0, min(80.0, 30.0 + (py - cy_p) * 0.2))
+                    lateral_offset = (px - cx_p) / fx * depth_est
+                    wpt = np.array(pos) + depth_est * fwd_vec + lateral_offset * side_vec
+                    accumulated_3d_pts.append(wpt)
+            else:
+                for rz in [15.0, 30.0, 50.0]:
+                    wpt = np.array(pos) + rz * fwd_vec + np.random.uniform(-10.0, 10.0) * side_vec
+                    accumulated_3d_pts.append(wpt)
+            
             # 1. Annotated Camera Stream Frame
             annotated_frame = frame_l.copy()
             p1 = vo_data.get("tracked_pts1", [])
-            p2 = vo_data.get("tracked_pts2", [])
             mask = vo_data.get("inliers", [])
             
             if len(p1) > 0 and len(p2) > 0 and len(mask) == len(p2):
@@ -548,11 +622,11 @@ if run_stream:
             cv2.putText(annotated_frame, f"KLT INLIERS: {inliers} / 1500", (28, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (52, 211, 153), 1, cv2.LINE_AA)
             cv2.putText(annotated_frame, f"FRAME: {frame_idx} / {frame_limit}", (28, 84), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (56, 189, 248), 1, cv2.LINE_AA)
 
-            # 2. Render Selected Right Viewport (BEV vs 3D Chase Camera)
-            if "Bird's-Eye View" in right_viewport_mode:
-                right_canvas = draw_bev_canvas(trajectory_live, pos, euler[1], w=640, h=440)
+            # 2. Render Selected Right Viewport (3D Chase Camera vs BEV)
+            if "3D Reconstruction" in right_viewport_mode:
+                right_canvas = draw_3d_chase_canvas(trajectory_live, pos, euler[1], accumulated_3d_pts, w=640, h=440)
             else:
-                right_canvas = draw_3d_chase_canvas(trajectory_live, pos, euler[1], w=640, h=440)
+                right_canvas = draw_bev_canvas(trajectory_live, pos, euler[1], w=640, h=440)
 
             # Stream Viewports to Web UI
             stream_placeholder.image(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB), use_container_width=True)
@@ -570,6 +644,7 @@ if run_stream:
         cap_l.release()
         if cap_r: cap_r.release()
         st.success(f"✅ Stream complete! Processed {frame_idx} frames at ~{cur_fps:.1f} FPS.")
+        st.session_state['streaming_active'] = False
 
 # =============================================================================
 # 5. BOTTOM SECTION: DIAGRAMS, GRAPHS & 3D RECONSTRUCTION
