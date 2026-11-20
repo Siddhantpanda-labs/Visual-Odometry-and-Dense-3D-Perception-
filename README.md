@@ -8,16 +8,6 @@
 
 An end-to-end, automotive-grade Computer Vision and Visual Odometry (VO) perception platform. The system couples classical projective geometry with real-time failure-mode gating (motion blur, sub-pixel parallax, planar degeneracy, kinematic angular rate limits) and calibrated stereo triangulation ($b = 0.54\,\text{m}$) paired with sliding-window bundle adjustment.
 
----
-
-## 👨‍🎓 Project Metadata
-* **Student:** Sidhant Kumar Panda (Registration No: **12413416**)
-* **Project Guide:** Abhishek Tiwari
-* **Course:** Computer Vision (CV) Project — **CSE471**
-* **Institution:** School of Computer Science and Engineering, Division of Machine Intelligence
-
----
-
 ## 🚀 Key Empirical Benchmark Findings
 
 Evaluated across the 450-frame controlled autonomous driving course via closed-form Sim(3) Umeyama alignment:
